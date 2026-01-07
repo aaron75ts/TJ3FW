@@ -1,0 +1,30 @@
+# TJ3 board/application IO aggregator
+
+description: |
+  TJ3 IO pin definitions (GPIOs) used by the application.
+
+compatible: "tj3,io"
+
+properties:
+  di1.1-gpios:
+    type: phandle-array
+    description: DI1.1 input GPIO
+  di2.1-gpios:
+    type: phandle-array
+    description: DI2.1 input GPIO
+
+  pulse-out-gpios:
+    type: phandle-array
+    description: Pulse output GPIO
+
+  poff-detect-gpios:
+    type: phandle-array
+    description: Power-off detect GPIO
+
+  pw-reset-gpios:
+    type: phandle-array
+    description: Power module reset GPIO
+
+  nrp-reset-gpios:
+    type: phandle-array
+    description: NRP reset GPIO

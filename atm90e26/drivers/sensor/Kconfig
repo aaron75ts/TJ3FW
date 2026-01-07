@@ -1,0 +1,3 @@
+if SENSOR
+rsource "m90e26/Kconfig"
+endif # SENSOR
