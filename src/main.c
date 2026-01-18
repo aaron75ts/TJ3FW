@@ -49,6 +49,7 @@ BUILD_ASSERT(DT_NODE_EXISTS(TJ3_IO_NODE), "tj3_io node missing in devicetree");
 BUILD_ASSERT(DT_NODE_HAS_PROP(TJ3_IO_NODE, di1_1_gpios), "tj3_io missing di1_1_gpios");
 BUILD_ASSERT(DT_NODE_HAS_PROP(TJ3_IO_NODE, di2_1_gpios), "tj3_io missing di2_1_gpios");
 
+static const struct gpio_dt_spec g_led0 = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
 static const struct gpio_dt_spec g_di1 = GPIO_DT_SPEC_GET(TJ3_IO_NODE, di1_1_gpios);
 static const struct gpio_dt_spec g_di2 = GPIO_DT_SPEC_GET(TJ3_IO_NODE, di2_1_gpios);
 static char g_di1_ascii = '0';
@@ -589,7 +590,7 @@ static int read_meter(const struct device *atm,
 int main(void)
 {
         k_msleep(1000);
-        LOG_INF("Hello World! %s", CONFIG_BOARD_TARGET);
+        LOG_INF("\nHello World! %s", CONFIG_BOARD_TARGET);
 
         int rc = tj3_comm_nrf9151_init(on_nrf9151_frame, NULL);
         if (rc != 0)
@@ -621,106 +622,121 @@ int main(void)
                 (void)gpio_pin_configure_dt(&g_di2, GPIO_INPUT);
         }
 
+        if (device_is_ready(g_led0.port))
+        {
+                (void)gpio_pin_configure_dt(&g_led0, GPIO_OUTPUT_ACTIVE);
+                LOG_INF("LED0 initialized");
+        }
+        else
+        {
+                LOG_WRN("LED0 not ready");
+        }
+
         while (1)
         {
                 k_sleep(K_SECONDS(1));
 
-                tj3_di_update();
-
-                const struct device *atms[3] = {atm1, atm2, atm3};
-
-                float currents_a[6] = {0};
-                float angles_deg[6] = {0};
-                bool all_ok = true;
-
-                for (int idx = 0; idx < 3; idx++)
+                if (device_is_ready(g_led0.port))
                 {
-                        float v_v = 0.0f;
-                        float i1_a = 0.0f;
-                        float i2_a = 0.0f;
-                        float angle1_deg = 0.0f;
-                        float angle2_deg = 0.0f;
-                        float p_w = 0.0f;
-                        float pf = 0.0f;
-
-                        if (!device_is_ready(atms[idx]))
-                        {
-                                LOG_WRN("ATM%d not ready (skipping)", idx + 1);
-                                all_ok = false;
-                                continue;
-                        }
-
-                        rc = read_meter(atms[idx], &v_v, &i1_a, &i2_a, &angle1_deg, &angle2_deg, &p_w, &pf);
-                        if (rc != 0)
-                        {
-                                LOG_WRN("Sensor%d read failed (%d)", idx + 1, rc);
-                                all_ok = false;
-                                continue;
-                        }
-
-                        currents_a[idx * 2 + 0] = i1_a;
-                        currents_a[idx * 2 + 1] = i2_a;
-                        angles_deg[idx * 2 + 0] = angle1_deg;
-                        angles_deg[idx * 2 + 1] = angle2_deg;
-
-                        float io_ma = i1_a * 1000.0f;
-                        float ior_ma = tj3_comm_ior_calc_ma(io_ma, pf);
-
-                        LOG_INF("ATM%d | V: %.6f V, I1: %.6f A, I2: %.6f A, A1: %.1f deg, A2: %.1f deg, P: %.6f W, PF: %.6f, IOR: %.3f mA",
-                                idx + 1,
-                                (double)v_v,
-                                (double)i1_a,
-                                (double)i2_a,
-                                (double)angle1_deg,
-                                (double)angle2_deg,
-                                (double)p_w,
-                                (double)pf,
-                                (double)ior_ma);
-
-                        char line[160];
-                        int n = snprintk(line, sizeof(line),
-                                         "[MCU] ATM%d | V: %.6f V, I1: %.6f A, I2: %.6f A, A1: %.1f deg, A2: %.1f deg, P: %.6f W, PF: %.6f\r\n",
-                                         idx + 1,
-                                         (double)v_v,
-                                         (double)i1_a,
-                                         (double)i2_a,
-                                         (double)angle1_deg,
-                                         (double)angle2_deg,
-                                         (double)p_w,
-                                         (double)pf);
-                        if (n > 0)
-                        {
-                                (void)tj3_comm_nrf9151_send_log(line);
-                        }
+                        (void)gpio_pin_toggle_dt(&g_led0);
                 }
 
-                static int64_t last_fa_ms;
-                int64_t now_ms = k_uptime_get();
+                // tj3_di_update();
 
-                memcpy(g_last_currents_a, currents_a, sizeof(currents_a));
-                memcpy(g_last_angles_deg, angles_deg, sizeof(angles_deg));
-                g_last_snapshot_ok = all_ok;
+                // const struct device *atms[3] = {atm1, atm2, atm3};
 
-                if (all_ok && (now_ms - last_fa_ms) >= (int64_t)TJ3_FA_PERIOD_S * 1000)
-                {
-                        last_fa_ms = now_ms;
+                // float currents_a[6] = {0};
+                // float angles_deg[6] = {0};
+                // bool all_ok = true;
 
-                        uint8_t body[256];
-                        uint16_t body_len = 0;
+                // for (int idx = 0; idx < 3; idx++)
+                // {
+                //         float v_v = 0.0f;
+                //         float i1_a = 0.0f;
+                //         float i2_a = 0.0f;
+                //         float angle1_deg = 0.0f;
+                //         float angle2_deg = 0.0f;
+                //         float p_w = 0.0f;
+                //         float pf = 0.0f;
 
-                        int err = build_payload_fa(currents_a, body, sizeof(body), &body_len);
-                        if (err == 0)
-                        {
-                                err = mqtt_publish_ascii("FA", body, body_len);
-                                if (err != 0)
-                                {
-                                        LOG_WRN("MQTT FA publish failed (%d)", err);
-                                }
-                        }
-                        else
-                        {
-                                LOG_WRN("Build FA payload failed (%d)", err);
-                        }
-                }
+                //         if (!device_is_ready(atms[idx]))
+                //         {
+                //                 LOG_WRN("ATM%d not ready (skipping)", idx + 1);
+                //                 all_ok = false;
+                //                 continue;
+                //         }
+
+                //         rc = read_meter(atms[idx], &v_v, &i1_a, &i2_a, &angle1_deg, &angle2_deg, &p_w, &pf);
+                //         if (rc != 0)
+                //         {
+                //                 LOG_WRN("Sensor%d read failed (%d)", idx + 1, rc);
+                //                 all_ok = false;
+                //                 continue;
+                //         }
+
+                //         currents_a[idx * 2 + 0] = i1_a;
+                //         currents_a[idx * 2 + 1] = i2_a;
+                //         angles_deg[idx * 2 + 0] = angle1_deg;
+                //         angles_deg[idx * 2 + 1] = angle2_deg;
+
+                //         float io_ma = i1_a * 1000.0f;
+                //         float ior_ma = tj3_comm_ior_calc_ma(io_ma, pf);
+
+                //         LOG_INF("ATM%d | V: %.6f V, I1: %.6f A, I2: %.6f A, A1: %.1f deg, A2: %.1f deg, P: %.6f W, PF: %.6f, IOR: %.3f mA",
+                //                 idx + 1,
+                //                 (double)v_v,
+                //                 (double)i1_a,
+                //                 (double)i2_a,
+                //                 (double)angle1_deg,
+                //                 (double)angle2_deg,
+                //                 (double)p_w,
+                //                 (double)pf,
+                //                 (double)ior_ma);
+
+                //         char line[160];
+                //         int n = snprintk(line, sizeof(line),
+                //                          "[MCU] ATM%d | V: %.6f V, I1: %.6f A, I2: %.6f A, A1: %.1f deg, A2: %.1f deg, P: %.6f W, PF: %.6f\r\n",
+                //                          idx + 1,
+                //                          (double)v_v,
+                //                          (double)i1_a,
+                //                          (double)i2_a,
+                //                          (double)angle1_deg,
+                //                          (double)angle2_deg,
+                //                          (double)p_w,
+                //                          (double)pf);
+                //         if (n > 0)
+                //         {
+                //                 (void)tj3_comm_nrf9151_send_log(line);
+                //         }
+                // }
+
+                // static int64_t last_fa_ms;
+                // int64_t now_ms = k_uptime_get();
+
+                // memcpy(g_last_currents_a, currents_a, sizeof(currents_a));
+                // memcpy(g_last_angles_deg, angles_deg, sizeof(angles_deg));
+                // g_last_snapshot_ok = all_ok;
+
+                // if (all_ok && (now_ms - last_fa_ms) >= (int64_t)TJ3_FA_PERIOD_S * 1000)
+                // {
+                //         last_fa_ms = now_ms;
+
+                //         uint8_t body[256];
+                //         uint16_t body_len = 0;
+
+                //         int err = build_payload_fa(currents_a, body, sizeof(body), &body_len);
+                //         if (err == 0)
+                //         {
+                //                 err = mqtt_publish_ascii("FA", body, body_len);
+                //                 if (err != 0)
+                //                 {
+                //                         LOG_WRN("MQTT FA publish failed (%d)", err);
+                //                 }
+                //         }
+                //         else
+                //         {
+                //                 LOG_WRN("Build FA payload failed (%d)", err);
+                //         }
+                // }
         }
 }

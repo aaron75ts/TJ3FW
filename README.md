@@ -25,5 +25,5 @@ west build -b nrf54l15dk/nrf54l15/cpuapp/ns -S . -d build_dev -p always -- -DCON
 ## 燒錄
 
 ```shell
-> west flash -d build_dev
+west flash -d build_dev
 ```

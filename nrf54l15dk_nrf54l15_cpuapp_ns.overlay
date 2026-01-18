@@ -69,57 +69,61 @@
     // };
 
     // /* UART_DEBUG(Console, VCOM0, UART0)): TX=P0.00, RX=P0.01 */
-    // uart30_default: uart30_default {
+
+    // uart00_default: uart00_default {
         //     group1 {
-            //         psels = <NRF_PSEL(UART_TX, 0, 0)>;
+            //         /* TX=P1.09 */
+            //         psels = <NRF_PSEL(UART_TX, 1, 9)>;
         //     };
 
         //     group2 {
-            //         psels = <NRF_PSEL(UART_RX, 0, 1)>;
+            //         /* RX=P1.10 */
+            //         psels = <NRF_PSEL(UART_RX, 1, 10)>;
             //         bias-pull-up;
         //     };
     // };
-    // uart30_sleep: uart30_sleep {
+    // uart00_sleep: uart00_sleep {
         //     group1 {
-            //         psels = <NRF_PSEL(UART_TX, 0, 0)>,
-                               //                 <NRF_PSEL(UART_RX, 0, 1)>;
+            //         psels = <NRF_PSEL(UART_TX, 1, 9)>,
+                               //                 <NRF_PSEL(UART_RX, 1, 10)>;
             //         low-power-enable;
         //     };
     // };
 
-    // /* UART_NRP(nRF9151, VCOM1, UART1): TX=P1.05, RX=P1.04 */
-    // uart20_default: uart20_default {
-        //     group1 {
-            //         psels = <NRF_PSEL(UART_TX, 1, 5)>;
-        //     };
 
-        //     group2 {
-            //         psels = <NRF_PSEL(UART_RX, 1, 4)>;
-            //         bias-pull-up;
-        //     };
-    // };
-    // uart20_sleep: uart20_sleep {
-        //     group1 {
-            //         psels = <NRF_PSEL(UART_TX, 1, 5)>,
-                               //                 <NRF_PSEL(UART_RX, 1, 4)>;
-            //         low-power-enable;
-        //     };
-    // };
+    /* UART_NRP(nRF9151, VCOM1, UART1): TX=P1.05, RX=P1.04 */
+    uart30_default: uart30_default {
+        group1 {
+            psels = <NRF_PSEL(UART_TX, 0, 0)>;
+        };
+
+        group2 {
+            psels = <NRF_PSEL(UART_RX, 0, 1)>;
+            bias-pull-up;
+        };
+    };
+    uart30_sleep: uart30_sleep {
+        group1 {
+            psels = <NRF_PSEL(UART_TX, 0, 0)>,
+                    <NRF_PSEL(UART_RX, 0, 1)>;
+            low-power-enable;
+        };
+    };
+
+
 
     /* UART_AT1(ATM90#1): P1.09, P1.10 */
-    uart00_default: uart00_default {
+    uart20_default: uart20_default {
         group1 {
-            /* TX=P1.09 */
             psels = <NRF_PSEL(UART_TX, 1, 9)>;
         };
 
         group2 {
-            /* RX=P1.10 */
             psels = <NRF_PSEL(UART_RX, 1, 10)>;
             bias-pull-up;
         };
     };
-    uart00_sleep: uart00_sleep {
+    uart20_sleep: uart20_sleep {
         group1 {
             psels = <NRF_PSEL(UART_TX, 1, 9)>,
                     <NRF_PSEL(UART_RX, 1, 10)>;
@@ -201,27 +205,31 @@
     //     pinctrl-names = "default", "sleep";
 // };
 
-&uart20 {
-    status = "okay";
-    current-speed = <115200>;
-    // pinctrl-0 = <&uart20_default>;
-    // pinctrl-1 = <&uart20_sleep>;
+&uart00 {
+    status = "disabled";
+    // current-speed = <9600>;
+    // pinctrl-0 = <&uart00_default>;
+    // pinctrl-1 = <&uart00_sleep>;
     // pinctrl-names = "default", "sleep";
+
+    // m90e26_1: m90e26_1 {
+        //     compatible = "atmel,m90e26";
+        //     status = "okay";
+    // };
 };
 
 &uart30 {
     status = "okay";
     current-speed = <115200>;
-    // pinctrl-0 = <&uart30_default>;
-    // pinctrl-1 = <&uart30_sleep>;
-    // pinctrl-names = "default", "sleep";
+    pinctrl-0 = <&uart30_default>;
+    pinctrl-1 = <&uart30_sleep>;
+    pinctrl-names = "default", "sleep";
 };
-
-&uart00 {
+&uart20 {
     status = "okay";
     current-speed = <9600>;
-    pinctrl-0 = <&uart00_default>;
-    pinctrl-1 = <&uart00_sleep>;
+    pinctrl-0 = <&uart20_default>;
+    pinctrl-1 = <&uart20_sleep>;
     pinctrl-names = "default", "sleep";
 
     m90e26_1: m90e26_1 {
@@ -255,30 +263,6 @@
         status = "okay";
     };
 };
-
-// &spi20 {
-    //     status = "okay";
-    //     pinctrl-0 = <&spi20_default>;
-    //     pinctrl-1 = <&spi20_sleep>;
-    //     pinctrl-names = "default", "sleep";
-    //     cs-gpios = <&gpio2 5 GPIO_ACTIVE_LOW>;
-
-    //     ext_flash0: mx25r6435f@0 {
-        //         compatible = "jedec,spi-nor";
-
-        //         status = "okay";
-        //         reg = <0x0>;
-        //         spi-max-frequency = <0x7a1200>;
-        //         jedec-id = [ C2 28 17  ];
-        //         sfdp-bfp = [ E5 20 F1 FF FF FF FF 03 44 EB 08 6B 08 3B 04 BB EE FF FF FF FF FF 00 FF FF FF 00 FF 0C 20 0F 52 10 D8 00 FF 23 72 F5 00 82 ED 04 CC 44 83 48 44 30 B0 30 B0 F7 C4 D5 5C 00 BE 29 FF F0 D0 FF FF  ];
-        //         size = <0x4000000>;
-        //         has-dpd;
-        //         t-enter-dpd = <0x2710>;
-        //         t-exit-dpd = <0x88b8>;
-        //         // reset-gpios = <&gpio2 0 GPIO_ACTIVE_LOW>;
-        //         // wp-gpios = <&gpio2 3 GPIO_ACTIVE_LOW>;
-    //     };
-// };
 
 /{
     buttons {
@@ -323,10 +307,9 @@
     };
 
     aliases {
-        uart-debug = &uart30; /* Console log, VCOM0 */
-        uart-nrp   = &uart20; /* App log, VCOM1 */
+        uart-nrp   = &uart30; /* NRP log */
 
-        uart-at1 = &uart00; /* ATM90_1 */
+        uart-at1 = &uart20; /* ATM90_1 */
         uart-at2 = &uart21; /* ATM90_2 */
         uart-at3 = &uart22; /* ATM90_3 */
 
