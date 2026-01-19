@@ -1,9 +1,0 @@
-# dts/bindings/sensor/atmel,m90e26.yaml
-
-description: Atmel M90E26 Single-Phase Energy Metering IC (UART)
-
-compatible: "atmel,m90e26"
-
-include: base.yaml
-
-on-bus: uart

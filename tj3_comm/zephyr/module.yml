@@ -1,4 +1,0 @@
-name: tj3_comm
-build:
-  cmake: .
-  kconfig: Kconfig

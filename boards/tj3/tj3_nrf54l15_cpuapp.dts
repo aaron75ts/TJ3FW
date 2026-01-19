@@ -1,0 +1,17 @@
+/dts-v1/;
+
+#include <nordic/nrf54l15_cpuapp.dtsi>
+#include "nrf54l15_cpuapp_common.dtsi"
+
+/ {
+	compatible = "custom,tj3-nrf54l15-cpuapp";
+	model = "nRF54L15 TJ3 nRF54L15 Application MCU";
+
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+		zephyr,sram = &cpuapp_sram;
+	};
+};
+
+/* Include default memory partition configuration file */
+#include <nordic/nrf54l15_partition.dtsi>
