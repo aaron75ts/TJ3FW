@@ -1,0 +1,11 @@
+description: Atmel ATM90E26 Energy Metering IC
+
+compatible: "atmel,atm90e26"
+
+include: sensor-device.yaml
+
+properties:
+  uart:
+    type: phandle
+    required: true
+    description: UART device used to communicate with the sensor

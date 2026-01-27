@@ -1,0 +1,40 @@
+board:
+  name: tj3
+  full_name: nRF54L15 TJ3
+  vendor: custom
+  socs:
+    - name: nrf54l15
+      variants:
+        - name: ns
+          cpucluster: cpuapp
+runners:
+  run_once:
+    '--recover':
+      - runners:
+          - nrfjprog
+          - nrfutil
+        run: first
+        groups:
+          - boards:
+              - tj3/nrf54l15/cpuapp
+              - tj3/nrf54l15/cpuapp/ns
+    '--erase':
+      - runners:
+          - nrfjprog
+          - jlink
+          - nrfutil
+        run: first
+        groups:
+          - boards:
+              - tj3/nrf54l15/cpuapp
+              - tj3/nrf54l15/cpuapp/ns
+    '--reset':
+      - runners:
+          - nrfjprog
+          - jlink
+          - nrfutil
+        run: last
+        groups:
+          - boards:
+              - tj3/nrf54l15/cpuapp
+              - tj3/nrf54l15/cpuapp/ns

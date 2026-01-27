@@ -1,0 +1,12 @@
+# drivers/sensor/atm90e26/Kconfig
+
+menu "TJ3_DRIVERS"
+    menu "Sensor drivers"
+        config ATM90E26
+            bool "ATM90E26 Energy Monitoring IC"
+            default y
+            select UART_INTERRUPT_DRIVEN
+            help
+                Enable driver for Atmel ATM90E26 energy monitoring chip connected via UART.
+    endmenu
+endmenu

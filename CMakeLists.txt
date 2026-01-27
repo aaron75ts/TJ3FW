@@ -1,12 +1,16 @@
 cmake_minimum_required(VERSION 3.20.0)
-
-list(APPEND ZEPHYR_EXTRA_MODULES
-	${CMAKE_CURRENT_SOURCE_DIR}/atm90e26
-	${CMAKE_CURRENT_SOURCE_DIR}/tj3_comm
-)
-
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
-project(nRF54_TJ3)
+project(customer_board)
 
-target_sources(app PRIVATE src/main.c)
+add_subdirectory(drivers/sensor/atm90e26)
+
+target_include_directories(app PRIVATE inc)
+target_sources(app PRIVATE 
+    src/main.c
+    src/led.c
+    src/ble_gatt.c
+    src/protocol.c
+    src/spi_flash.c
+    src/fs_handler.c
+    src/ext_comm.c)

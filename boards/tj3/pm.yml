@@ -1,0 +1,5 @@
+mx25r64:
+    start_address: 0x0
+    size: 0x800000
+    placement:
+        before: [end]
