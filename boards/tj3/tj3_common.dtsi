@@ -1,0 +1,69 @@
+/*
+ * Copyright (c) 2024 Nordic Semiconductor ASA
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include "tj3_nrf54l15-pinctrl.dtsi"
+
+
+&uart20 {
+	status = "okay";
+	pinctrl-0 = <&uart20_default>;
+	pinctrl-1 = <&uart20_sleep>;
+	pinctrl-names = "default", "sleep";
+	current-speed = <9600>;
+};
+
+&uart21 {
+	status = "okay";
+	pinctrl-0 = <&uart21_default>;
+	pinctrl-1 = <&uart21_sleep>;
+	pinctrl-names = "default", "sleep";
+	current-speed = <9600>;
+};
+
+&uart22 {
+	status = "okay";
+	pinctrl-0 = <&uart22_default>;
+	pinctrl-1 = <&uart22_sleep>;
+	pinctrl-names = "default", "sleep";
+	current-speed = <9600>;
+};
+
+&uart30 {
+	status = "okay";
+	pinctrl-0 = <&uart30_default>;
+	pinctrl-1 = <&uart30_sleep>;
+	pinctrl-names = "default", "sleep";
+	current-speed = <115200>;
+};
+
+/ {
+	di1: di1 {
+		gpios = <&gpio2 6 GPIO_ACTIVE_HIGH>;
+	};
+	di2: di2 {
+		gpios = <&gpio2 7 GPIO_ACTIVE_HIGH>;
+	};
+	pulse_out: pulse_out {
+		gpios = <&gpio2 8 GPIO_ACTIVE_HIGH>;
+	};
+	poff_detect: poff_detect {
+		gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+	};
+	pw_reset: pw_reset {
+		gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
+	};
+	nrp_reset: nrp_reset {
+		gpios = <&gpio2 10 GPIO_ACTIVE_HIGH>;
+	};
+	leds {
+		compatible = "gpio-leds";
+		led_ind: led_ind {
+			gpios = <&gpio2 9 GPIO_ACTIVE_HIGH>;
+		};
+	};
+	btn: btn {
+		gpios = <&gpio1 2 GPIO_ACTIVE_LOW>;
+	};
+};

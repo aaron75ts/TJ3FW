@@ -1,0 +1,38 @@
+
+/ {
+    /* 定義虛擬的 RTT 節點 */
+    rtt0: rtt0 {
+        compatible = "segger,rtt-uart";
+    };
+
+    chosen {
+        /* 將所有關鍵輸出導向 RTT */
+        zephyr,console = &rtt0;
+        zephyr,shell-uart = &rtt0;
+        zephyr,uart-mcumgr = &rtt0;
+        zephyr,bt-mon-uart = &rtt0;
+        zephyr,bt-c2h-uart = &rtt0;
+
+        /* 告訴 pm 用 &mx25r64 做外部 flash */
+        nordic,pm-ext-flash = &mx25r64;
+    };
+
+    /* ATM90E26 Sensors */
+    atm1: atm90e26_1 {
+        compatible = "atmel,atm90e26";
+        uart = <&uart20>;
+        status = "okay";
+    };
+
+    atm2: atm90e26_2 {
+        compatible = "atmel,atm90e26";
+        uart = <&uart21>;
+        status = "okay";
+    };
+
+    atm3: atm90e26_3 {
+        compatible = "atmel,atm90e26";
+        uart = <&uart22>;
+        status = "okay";
+    };
+};

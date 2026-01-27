@@ -1,0 +1,11 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build with west",
+			"type": "shell",
+			"command": "west build --build-dir /Users/kiwi/Desktop/playground/nRF54L15/customer_board/build /Users/kiwi/Desktop/playground/nRF54L15/customer_board --pristine --board tj3/nrf54l15/cpuapp --sysbuild",
+			"problemMatcher": []
+		}
+	]
+}
