@@ -1,6 +1,0 @@
-{
-    "nrf-connect.applications": [
-        "${workspaceFolder}"
-    ],
-    "cmake.ignoreCMakeListsMissing": true
-}
