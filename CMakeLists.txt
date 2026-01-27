@@ -13,4 +13,5 @@ target_sources(app PRIVATE
     src/protocol.c
     src/spi_flash.c
     src/fs_handler.c
-    src/ext_comm.c)
+    src/ext_comm.c
+    src/di.c)

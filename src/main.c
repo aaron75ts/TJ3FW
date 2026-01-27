@@ -7,6 +7,7 @@
 #include "fs_handler.h"
 #include "ext_comm.h"
 #include "atm90e26.h"
+#include "di.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
@@ -60,6 +61,7 @@ int main(void)
         fs_handler_init();
         fs_handler_test(); // Test FS on boot
         ble_gatt_init();
+        di_init();
 
         while (1)
         {
