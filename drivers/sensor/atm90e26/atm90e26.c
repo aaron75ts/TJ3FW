@@ -328,7 +328,14 @@ static int atm90e26_init_chip(const struct device *dev)
 
     atm90e26_uart_write(dev, ATM90E26_REG_PLCONSTH, metering_regs[0]);
     atm90e26_uart_write(dev, ATM90E26_REG_PLCONSTL, metering_regs[1]);
+    atm90e26_uart_write(dev, ATM90E26_REG_LGAIN, metering_regs[2]);
+    atm90e26_uart_write(dev, ATM90E26_REG_LPHI, metering_regs[3]);
+    atm90e26_uart_write(dev, ATM90E26_REG_NGAIN, metering_regs[4]);
+    atm90e26_uart_write(dev, ATM90E26_REG_NPHI, metering_regs[5]);
     atm90e26_uart_write(dev, ATM90E26_REG_PSTARTTH, metering_regs[6]);
+    atm90e26_uart_write(dev, ATM90E26_REG_PNOLTH, metering_regs[7]);
+    atm90e26_uart_write(dev, ATM90E26_REG_QSTARTTH, metering_regs[8]);
+    atm90e26_uart_write(dev, ATM90E26_REG_QNOLTH, metering_regs[9]);
     atm90e26_uart_write(dev, ATM90E26_REG_MMODE, metering_regs[10]);
 
     /* 4. Calculate and Write CS1 */
@@ -357,6 +364,13 @@ static int atm90e26_init_chip(const struct device *dev)
     atm90e26_uart_write(dev, ATM90E26_REG_UGAIN, measurement_regs[0]);
     atm90e26_uart_write(dev, ATM90E26_REG_IGAINL, measurement_regs[1]);
     atm90e26_uart_write(dev, ATM90E26_REG_IGAINN, measurement_regs[2]);
+    atm90e26_uart_write(dev, ATM90E26_REG_UOFFSET, measurement_regs[3]);
+    atm90e26_uart_write(dev, ATM90E26_REG_IOFFSETL, measurement_regs[4]);
+    atm90e26_uart_write(dev, ATM90E26_REG_IOFFSETN, measurement_regs[5]);
+    atm90e26_uart_write(dev, ATM90E26_REG_POFFSETL, measurement_regs[6]);
+    atm90e26_uart_write(dev, ATM90E26_REG_QOFFSETL, measurement_regs[7]);
+    atm90e26_uart_write(dev, ATM90E26_REG_POFFSETN, measurement_regs[8]);
+    atm90e26_uart_write(dev, ATM90E26_REG_QOFFSETN, measurement_regs[9]);
 
     /* 8. Calculate and Write CS2 */
     cs2 = atm90e26_calculate_cs2(measurement_regs);

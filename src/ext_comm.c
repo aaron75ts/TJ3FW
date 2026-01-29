@@ -98,3 +98,53 @@ int ext_comm_init(void)
     }
     return 0;
 }
+
+int ext_comm_send_log(const char *log_msg)
+{
+    if (!device_is_ready(uart_dev))
+    {
+        return -ENODEV;
+    }
+
+    size_t msg_len = strlen(log_msg);
+    if (msg_len == 0 || msg_len > 240)
+    {
+        return -EINVAL; // Message too long or empty
+    }
+
+    // 構建 protocol packet
+    // Format: [STX][LEN_L][LEN_H][OP_CODE][Payload][ETX][CRC_1][CRC_2]
+    uint8_t packet[300];
+    size_t idx = 0;
+
+    // STX
+    packet[idx++] = PROTOCOL_STX;
+
+    // LEN (OP + Payload + ETX) = 1 + msg_len + 1
+    uint16_t len = 1 + msg_len + 1;
+    packet[idx++] = len & 0xFF;        // LEN_L (LSB)
+    packet[idx++] = (len >> 8) & 0xFF; // LEN_H (MSB)
+
+    // OP_CODE
+    packet[idx++] = OP_EXT_LOG_OUTPUT;
+
+    // Payload (log message)
+    memcpy(&packet[idx], log_msg, msg_len);
+    idx += msg_len;
+
+    // ETX
+    packet[idx++] = PROTOCOL_ETX;
+
+    // CRC (從 LEN_L 到 ETX)
+    uint16_t crc = protocol_calculate_crc(&packet[1], 2 + len);
+    packet[idx++] = crc & 0xFF;        // CRC_1 (LSB)
+    packet[idx++] = (crc >> 8) & 0xFF; // CRC_2 (MSB)
+
+    // Send via UART30
+    for (size_t i = 0; i < idx; i++)
+    {
+        uart_poll_out(uart_dev, packet[i]);
+    }
+
+    return 0;
+}

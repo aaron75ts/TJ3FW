@@ -14,6 +14,13 @@ extern "C"
      */
     int ext_comm_init(void);
 
+    /**
+     * @brief Send formatted log message via UART30 protocol
+     * @param log_msg 格式化的 LOG 訊息字串
+     * @return 0 on success, negative on error
+     */
+    int ext_comm_send_log(const char *log_msg);
+
 #ifdef __cplusplus
 }
 #endif

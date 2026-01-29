@@ -16,6 +16,8 @@
 #include "protocol.h"
 #include "spi_flash.h"
 #include "fs_handler.h"
+#include "di.h"
+#include "pulse.h"
 
 LOG_MODULE_REGISTER(ble_gatt, LOG_LEVEL_INF);
 
@@ -176,6 +178,75 @@ static void protocol_handler(struct bt_conn *conn, const protocol_packet_t *pack
         }
         break;
 
+    case OP_BLE_SET_AI_CONFIG:
+        LOG_INF("CMD: Set AI Config (DI Timing)");
+        {
+            // Payload: [DI1_ON_L][DI1_ON_H][DI1_OFF_L][DI1_OFF_H][DI2_ON_L][DI2_ON_H][DI2_OFF_L][DI2_OFF_H]
+            if (packet->payload_len != 8)
+            {
+                LOG_ERR("Invalid AI config payload length: %d", packet->payload_len);
+                uint8_t error = 0xFF;
+                tx_len = protocol_compose(op_code, &error, 1, tx_buf, sizeof(tx_buf));
+                break;
+            }
+
+            // 解析 DI1 設定 (Little Endian / LSB first)
+            uint16_t di1_on_time = packet->payload[0] | (packet->payload[1] << 8);
+            uint16_t di1_off_time = packet->payload[2] | (packet->payload[3] << 8);
+
+            // 解析 DI2 設定 (Little Endian / LSB first)
+            uint16_t di2_on_time = packet->payload[4] | (packet->payload[5] << 8);
+            uint16_t di2_off_time = packet->payload[6] | (packet->payload[7] << 8);
+
+            LOG_INF("DI1: ON=%d, OFF=%d", di1_on_time, di1_off_time);
+            LOG_INF("DI2: ON=%d, OFF=%d", di2_on_time, di2_off_time);
+
+            // 設定 DI1 和 DI2
+            int rc1 = di_set_config(DI_CHANNEL_1, di1_on_time, di1_off_time);
+            int rc2 = di_set_config(DI_CHANNEL_2, di2_on_time, di2_off_time);
+
+            if (rc1 == 0 && rc2 == 0)
+            {
+                // 成功：Echo 回原始 payload
+                tx_len = protocol_compose(op_code, packet->payload,
+                                          packet->payload_len, tx_buf, sizeof(tx_buf));
+                LOG_INF("DI config updated successfully");
+            }
+            else
+            {
+                // 失敗：回傳錯誤碼
+                uint8_t error = 0xFF;
+                tx_len = protocol_compose(op_code, &error, 1, tx_buf, sizeof(tx_buf));
+                LOG_ERR("Failed to update DI config: rc1=%d, rc2=%d", rc1, rc2);
+            }
+        }
+        break;
+
+    case OP_BLE_GET_AI_CONFIG:
+        LOG_INF("CMD: Get AI Config (DI Timing)");
+        {
+            di_config_t di1_cfg, di2_cfg;
+
+            di_get_config(DI_CHANNEL_1, &di1_cfg);
+            di_get_config(DI_CHANNEL_2, &di2_cfg);
+
+            uint8_t response[8];
+            // Little Endian / LSB first
+            response[0] = di1_cfg.on_time & 0xFF;
+            response[1] = (di1_cfg.on_time >> 8) & 0xFF;
+            response[2] = di1_cfg.off_time & 0xFF;
+            response[3] = (di1_cfg.off_time >> 8) & 0xFF;
+            response[4] = di2_cfg.on_time & 0xFF;
+            response[5] = (di2_cfg.on_time >> 8) & 0xFF;
+            response[6] = di2_cfg.off_time & 0xFF;
+            response[7] = (di2_cfg.off_time >> 8) & 0xFF;
+
+            tx_len = protocol_compose(op_code, response, 8, tx_buf, sizeof(tx_buf));
+            LOG_INF("DI1: ON=%d, OFF=%d", di1_cfg.on_time, di1_cfg.off_time);
+            LOG_INF("DI2: ON=%d, OFF=%d", di2_cfg.on_time, di2_cfg.off_time);
+        }
+        break;
+
         /* Handle other OPs... */
 
     default:
@@ -287,6 +358,8 @@ static ssize_t write_meter_config(struct bt_conn *conn, const struct bt_gatt_att
 static ssize_t read_power_pulse(struct bt_conn *conn, const struct bt_gatt_attr *attr,
                                 void *buf, uint16_t len, uint16_t offset)
 {
+    /* 從脈衝模組讀取實際頻率 (milli-Hz) */
+    power_pulse = pulse_get_frequency();
     uint32_t pulse_le = sys_cpu_to_le32(power_pulse);
     LOG_DBG("Read Power Pulse: %u milli-Hz", power_pulse);
     return bt_gatt_attr_read(conn, attr, buf, len, offset, &pulse_le, sizeof(pulse_le));
@@ -322,14 +395,26 @@ static ssize_t write_log_fetch(struct bt_conn *conn, const struct bt_gatt_attr *
     uint16_t log_index = sys_le16_to_cpu(*(uint16_t *)buf);
     LOG_INF("Log Fetch request: index %u", log_index);
 
-    // TODO: Implement actual log fetching and indicate back
-    // For now, just acknowledge
-    uint8_t dummy_log[20] = {0};
+    /* 準備日誌回應封包 */
+    uint8_t log_response[20];
+    memset(log_response, 0, sizeof(log_response));
+
+    /* 格式: [index(2)][timestamp(4)][level(1)][message(13)] */
+    sys_put_le16(log_index, &log_response[0]);
+
+    /* 簡化實現：返回當前系統運行時間和日誌計數 */
+    uint32_t uptime = k_uptime_get_32();
+    sys_put_le32(uptime, &log_response[2]);
+    log_response[6] = 2; /* INFO level */
+
+    snprintf((char *)&log_response[7], 13, "Log #%u", log_index);
+
+    /* 發送 Indication */
     bt_gatt_indicate(conn, &(struct bt_gatt_indicate_params){
                                .uuid = &diag_log_fetch_uuid.uuid,
                                .attr = NULL,
-                               .data = dummy_log,
-                               .len = sizeof(dummy_log),
+                               .data = log_response,
+                               .len = sizeof(log_response),
                                .func = NULL,
                            });
 
@@ -365,11 +450,20 @@ static ssize_t write_clear_logs(struct bt_conn *conn, const struct bt_gatt_attr 
 {
     LOG_INF("Clear Logs request");
 
-    // TODO: Implement actual log clearing
+    /* 清除日誌檔案 (可選：刪除並重新創建) */
+    uint8_t status = 0x00; // Success
+
+    /* 簡化實現：重置計數器 */
     log_count = 0;
 
+    /* 如果需要實際刪除檔案，可使用：
+     * fs_unlink("/lfs/di_events.csv");
+     * fs_unlink("/lfs/di_state.txt");
+     */
+
+    LOG_INF("Logs cleared successfully");
+
     // Indicate status back
-    uint8_t status = 0x00; // Success
     bt_gatt_indicate(conn, &(struct bt_gatt_indicate_params){
                                .uuid = &diag_clear_logs_uuid.uuid,
                                .attr = NULL,
@@ -566,4 +660,39 @@ void ble_gatt_init(void)
     }
 
     LOG_INF("Advertising successfully started");
+}
+
+/**
+ * @brief 更新 Alarm Status 特徵值中的指定位元
+ *
+ * 用於 DI 模組更新 BLE Alarm Status (UUID ...8c05)
+ * BIT_6: DI1 狀態
+ * BIT_7: DI2 狀態
+ *
+ * @param bit_position 位元位置 (0-31)
+ * @param value 位元值 (true=1, false=0)
+ */
+void ble_gatt_update_alarm_status(uint8_t bit_position, bool value)
+{
+    if (bit_position >= 32)
+    {
+        LOG_ERR("Invalid bit position: %u", bit_position);
+        return;
+    }
+
+    uint32_t mask = 1U << bit_position;
+
+    if (value)
+    {
+        alarm_status |= mask; /* 設置位元 */
+    }
+    else
+    {
+        alarm_status &= ~mask; /* 清除位元 */
+    }
+
+    LOG_DBG("Alarm Status updated: BIT_%u = %d, Status = 0x%08X",
+            bit_position, value, alarm_status);
+
+    /* TODO: 發送 BLE Notification (需要連接時才能發送) */
 }

@@ -8,9 +8,14 @@
 #include "ext_comm.h"
 #include "atm90e26.h"
 #include "di.h"
+#include "settings.h"
+#include "measure.h"
+#include "pulse.h"
+#include "poff_detect.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
+#if 0 // 保留舊的單獨讀取方式作為參考
 static void read_atm90e26(const struct device *dev, const char *name)
 {
         struct sensor_value volt, curr, pwr, pwr_react, pwr_app, pf, freq, energy;
@@ -47,12 +52,10 @@ static void read_atm90e26(const struct device *dev, const char *name)
                 freq.val1, freq.val2 / 10000,
                 energy.val1);
 }
+#endif
 
 int main(void)
 {
-        const struct device *atm1 = DEVICE_DT_GET(DT_NODELABEL(atm1));
-        const struct device *atm2 = DEVICE_DT_GET(DT_NODELABEL(atm2));
-        const struct device *atm3 = DEVICE_DT_GET(DT_NODELABEL(atm3));
         int count = 0;
 
         led_init();
@@ -63,15 +66,30 @@ int main(void)
         ble_gatt_init();
         di_init();
 
+        /* 初始化設定值、測電模組、脈衝監測模組、停電檢測 */
+        settings_init();
+        measure_init();
+        pulse_init();
+        poff_detect_init();
+
         while (1)
         {
                 led_toggle();
 
                 if (count % 5 == 0)
                 {
-                        read_atm90e26(atm1, "ATM1");
-                        read_atm90e26(atm2, "ATM2");
-                        read_atm90e26(atm3, "ATM3");
+                        /* 新的測電計算週期 */
+                        measure_perform_cycle();
+
+                        /* 發送 LOG 輸出 (假設為單相，使用脈衝計數) */
+                        uint32_t pulse_count = pulse_get_count();
+                        measure_send_log_output(PHASE_SINGLE, pulse_count);
+
+                        /* 記錄電量資訊 */
+                        LOG_INF("Pulse: count=%u, kWh=%.4f, Power=%.3f kW",
+                                pulse_count,
+                                (double)pulse_get_kwh(),
+                                (double)pulse_get_current_power());
                 }
                 count++;
 

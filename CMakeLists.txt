@@ -14,4 +14,8 @@ target_sources(app PRIVATE
     src/spi_flash.c
     src/fs_handler.c
     src/ext_comm.c
-    src/di.c)
+    src/di.c
+    src/settings.c
+    src/measure.c
+    src/pulse.c
+    src/poff_detect.c)
