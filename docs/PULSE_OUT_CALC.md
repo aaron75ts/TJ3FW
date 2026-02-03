@@ -17,7 +17,7 @@
 *   **警報判定**：若預測電力超過「目標電力 (Alarm 1)」或「限界電力 (Alarm 2)」，系統需發送 MQTT 電文並驅動警報燈或接點。
 
 ### 4. BLE 傳輸規範
-*   **參數設定**：透過 **OP_CODE 0xE5** 設定 `PULSE_coefficient`。格式為 **4-byte Big Endian**（例如 0.0012 寫為 `0x0000000C`）。
+*   **參數設定**：透過 **OP_CODE 0xE5** 設定 `PULSE_coefficient`。格式為 **4-byte Little Endian**（例如 0.0012 寫為 `0x0C000000`）。
 *   **即時監測**：特徵值 `Power Meter Pulse` (...8c04) 以 `uint32_le` 格式輸出脈衝頻率，單位為 **milli-Hz**。
 
-目前脈衝係數的計算邏輯（Big Endian）與其他 Little Endian 參數不同，這部分您在 App 端的資料處理是否已經對齊了？
+目前脈衝係數的計算邏輯已統一使用 **Little Endian**，與其他參數一致。

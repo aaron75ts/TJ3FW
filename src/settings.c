@@ -22,7 +22,7 @@ LOG_MODULE_REGISTER(settings, LOG_LEVEL_INF);
 
 /* 全域設定值 */
 static ai_config_t g_ai_config;
-static comm_demand_config_t g_comm_demand_config;
+static demand_config_t g_demand_config;
 static mqtt_config_t g_mqtt_config;
 static device_info_t g_device_info;
 static meter_config_t g_meter_config;
@@ -46,20 +46,23 @@ static void settings_init_defaults(void)
     g_ai_config.ig_on_time = 5;
     g_ai_config.ig_off_time = 3;
 
-    /* 通訊設定預設值 */
-    g_comm_demand_config.server_ip[0] = 172;
-    g_comm_demand_config.server_ip[1] = 31;
-    g_comm_demand_config.server_ip[2] = 33;
-    g_comm_demand_config.server_ip[3] = 250;
-    g_comm_demand_config.server_port = 1883;
-    g_comm_demand_config.demand_alarm1 = 50;       // 50kW
-    g_comm_demand_config.demand_alarm2 = 60;       // 60kW
-    g_comm_demand_config.pulse_const = 0x0000000C; // 0.0012
-    strncpy(g_comm_demand_config.apn, "internet", sizeof(g_comm_demand_config.apn));
+    /* 需量與 Modem 設定預設值 */
+    g_demand_config.demand_alarm1 = 50;       // 50kW
+    g_demand_config.demand_alarm2 = 60;       // 60kW
+    g_demand_config.pulse_const = 0x0C000000; // 0.0012 (Little Endian)
+    g_demand_config.modem_ip[0] = 192;
+    g_demand_config.modem_ip[1] = 168;
+    g_demand_config.modem_ip[2] = 1;
+    g_demand_config.modem_ip[3] = 1;
+    strncpy(g_demand_config.apn, "internet", sizeof(g_demand_config.apn));
 
-    /* MQTT 設定預設值 */
+    /* MQTT 預設值 */
+
+    g_mqtt_config.server_port = 1883;
+    strncpy(g_mqtt_config.server_url, "mqtt://172.31.33.250:1883", sizeof(g_mqtt_config.server_url));
     strncpy(g_mqtt_config.client_id, "TJ3_NODE_000001", sizeof(g_mqtt_config.client_id));
-    strncpy(g_mqtt_config.server_url, "mqtt.example.com", sizeof(g_mqtt_config.server_url));
+    strncpy(g_mqtt_config.username, "", sizeof(g_mqtt_config.username));
+    strncpy(g_mqtt_config.password, "", sizeof(g_mqtt_config.password));
 
     /* 設備資訊預設值 */
     strncpy(g_device_info.device_name, "TJ3_Device", sizeof(g_device_info.device_name));
@@ -113,23 +116,23 @@ int settings_set_ai_config(const ai_config_t *config)
     return settings_save_to_flash();
 }
 
-int settings_get_comm_demand_config(comm_demand_config_t *config)
+int settings_get_demand_config(demand_config_t *config)
 {
     if (config == NULL)
     {
         return -EINVAL;
     }
-    memcpy(config, &g_comm_demand_config, sizeof(comm_demand_config_t));
+    memcpy(config, &g_demand_config, sizeof(demand_config_t));
     return 0;
 }
 
-int settings_set_comm_demand_config(const comm_demand_config_t *config)
+int settings_set_demand_config(const demand_config_t *config)
 {
     if (config == NULL)
     {
         return -EINVAL;
     }
-    memcpy(&g_comm_demand_config, config, sizeof(comm_demand_config_t));
+    memcpy(&g_demand_config, config, sizeof(demand_config_t));
     return settings_save_to_flash();
 }
 
@@ -245,29 +248,38 @@ int settings_save_to_flash(void)
     snprintf(line, sizeof(line), "ai_ig_off_time=%u\n", g_ai_config.ig_off_time);
     fs_write(&file, line, strlen(line));
 
-    /* 寫入通訊設定 */
-    snprintf(line, sizeof(line), "comm_server_ip=%u.%u.%u.%u\n",
-             g_comm_demand_config.server_ip[0], g_comm_demand_config.server_ip[1],
-             g_comm_demand_config.server_ip[2], g_comm_demand_config.server_ip[3]);
+    /* 寫入需量設定 */
+    snprintf(line, sizeof(line), "demand_alarm1=%u\n", g_demand_config.demand_alarm1);
     fs_write(&file, line, strlen(line));
 
-    snprintf(line, sizeof(line), "comm_server_port=%u\n", g_comm_demand_config.server_port);
+    snprintf(line, sizeof(line), "demand_alarm2=%u\n", g_demand_config.demand_alarm2);
     fs_write(&file, line, strlen(line));
 
-    snprintf(line, sizeof(line), "comm_demand_alarm1=%u\n", g_comm_demand_config.demand_alarm1);
+    snprintf(line, sizeof(line), "pulse_const=%u\n", g_demand_config.pulse_const);
     fs_write(&file, line, strlen(line));
 
-    snprintf(line, sizeof(line), "comm_demand_alarm2=%u\n", g_comm_demand_config.demand_alarm2);
+    snprintf(line, sizeof(line), "modem_ip=%u.%u.%u.%u\n",
+             g_demand_config.modem_ip[0], g_demand_config.modem_ip[1],
+             g_demand_config.modem_ip[2], g_demand_config.modem_ip[3]);
     fs_write(&file, line, strlen(line));
 
-    snprintf(line, sizeof(line), "comm_pulse_const=%u\n", g_comm_demand_config.pulse_const);
-    fs_write(&file, line, strlen(line));
-
-    snprintf(line, sizeof(line), "comm_apn=%s\n", g_comm_demand_config.apn);
+    snprintf(line, sizeof(line), "modem_apn=%s\n", g_demand_config.apn);
     fs_write(&file, line, strlen(line));
 
     /* 寫入 MQTT 設定 */
+    snprintf(line, sizeof(line), "mqtt_server_port=%u\n", g_mqtt_config.server_port);
+    fs_write(&file, line, strlen(line));
+
+    snprintf(line, sizeof(line), "mqtt_server_url=%s\n", g_mqtt_config.server_url);
+    fs_write(&file, line, strlen(line));
+
     snprintf(line, sizeof(line), "mqtt_client_id=%s\n", g_mqtt_config.client_id);
+    fs_write(&file, line, strlen(line));
+
+    snprintf(line, sizeof(line), "mqtt_username=%s\n", g_mqtt_config.username);
+    fs_write(&file, line, strlen(line));
+
+    snprintf(line, sizeof(line), "mqtt_password=%s\n", g_mqtt_config.password);
     fs_write(&file, line, strlen(line));
 
     snprintf(line, sizeof(line), "mqtt_server_url=%s\n", g_mqtt_config.server_url);
@@ -296,7 +308,6 @@ int settings_save_to_flash(void)
     return 0;
 }
 
-#if 0  /* 暫時不使用，等待實現完整的文件讀取功能 */
 /* 簡化的 key-value 解析器 */
 static int parse_key_value(const char *line, char *key, char *value)
 {
@@ -326,47 +337,60 @@ static int parse_key_value(const char *line, char *key, char *value)
 
     return 0;
 }
-#endif /* 結束 parse_key_value */
 
 int settings_load_from_flash(void)
 {
     struct fs_file_t file;
     int ret;
-
-#if 0 /* 這些變數將在完整實現時使用 */
+    char buffer[4096]; /* 讀取整個檔案的緩衝區 */
     char line[SETTINGS_MAX_LINE];
     char key[SETTINGS_MAX_LINE];
     char value[SETTINGS_MAX_LINE];
-#endif
+    ssize_t bytes_read;
+    int buf_pos = 0;
+    int line_pos = 0;
 
     fs_file_t_init(&file);
 
     ret = fs_open(&file, SETTINGS_FILE_PATH, FS_O_READ);
     if (ret < 0)
     {
-        LOG_WRN("Settings file not found");
+        LOG_WRN("Settings file not found, will use defaults");
         return ret;
     }
 
-    /* 逐行讀取並解析 */
-    /* 注意：這裡簡化實現，實際應該使用緩衝區逐行讀取 */
-    /* 暫時先記錄警告，實際應該實現完整的行讀取邏輯 */
-    LOG_WRN("Settings load from Flash not fully implemented");
-
-    /* TODO: 實現完整的逐行讀取邏輯
-     * 可以考慮：
-     * 1. 使用 fs_read 讀取整個文件到緩衝區
-     * 2. 解析緩衝區中的每一行
-     * 3. 或實現自己的 read_line 函數
-     */
-
+    /* 讀取整個檔案到緩衝區 */
+    bytes_read = fs_read(&file, buffer, sizeof(buffer) - 1);
     fs_close(&file);
-    return 0;
 
-/* 以下代碼暫時不執行，等待實現 read_line 功能 */
-#if 0
-    while (0) /* fs_handler_read_line(&file, line, sizeof(line)) > 0 */
+    if (bytes_read < 0)
     {
+        LOG_ERR("Failed to read settings file: %d", (int)bytes_read);
+        return bytes_read;
+    }
+
+    buffer[bytes_read] = '\0'; /* null terminate */
+    LOG_INF("Loading settings from flash (%d bytes)...", (int)bytes_read);
+
+    /* 逐行解析 */
+    while (buf_pos < bytes_read)
+    {
+        /* 讀取一行 */
+        line_pos = 0;
+        while (buf_pos < bytes_read && buffer[buf_pos] != '\n' && line_pos < SETTINGS_MAX_LINE - 1)
+        {
+            line[line_pos++] = buffer[buf_pos++];
+        }
+        line[line_pos] = '\0';
+        buf_pos++; /* skip \n */
+
+        /* 跳過空行 */
+        if (line_pos == 0 || line[0] == '#')
+        {
+            continue;
+        }
+
+        /* 解析 key=value */
         if (parse_key_value(line, key, value) < 0)
         {
             continue;
@@ -384,6 +408,27 @@ int settings_load_from_flash(void)
                 continue;
             }
 
+            snprintf(key_name, sizeof(key_name), "ai_phase_type_%d", i);
+            if (strcmp(key, key_name) == 0)
+            {
+                g_ai_config.phase_type[i] = atoi(value);
+                continue;
+            }
+
+            snprintf(key_name, sizeof(key_name), "ai_phase_corr_%d", i);
+            if (strcmp(key, key_name) == 0)
+            {
+                g_ai_config.phase_corr[i] = atoi(value);
+                continue;
+            }
+
+            snprintf(key_name, sizeof(key_name), "ai_zct_ratio_%d", i);
+            if (strcmp(key, key_name) == 0)
+            {
+                g_ai_config.zct_ratio[i] = atoi(value);
+                continue;
+            }
+
             snprintf(key_name, sizeof(key_name), "ai_light_leak_th_%d", i);
             if (strcmp(key, key_name) == 0)
             {
@@ -391,24 +436,119 @@ int settings_load_from_flash(void)
                 continue;
             }
 
-            /* ...其他欄位類似處理... */
+            snprintf(key_name, sizeof(key_name), "ai_heavy_leak_th_%d", i);
+            if (strcmp(key, key_name) == 0)
+            {
+                g_ai_config.heavy_leak_th[i] = atoi(value);
+                continue;
+            }
+
+            snprintf(key_name, sizeof(key_name), "ai_leak_on_time_%d", i);
+            if (strcmp(key, key_name) == 0)
+            {
+                g_ai_config.leak_on_time[i] = atoi(value);
+                continue;
+            }
+
+            snprintf(key_name, sizeof(key_name), "ai_leak_off_time_%d", i);
+            if (strcmp(key, key_name) == 0)
+            {
+                g_ai_config.leak_off_time[i] = atoi(value);
+                continue;
+            }
         }
 
-        /* 解析 MQTT 設定 */
-        if (strcmp(key, "mqtt_client_id") == 0)
+        /* 解析 Ig 設定 */
+        if (strcmp(key, "ai_ig_threshold") == 0)
         {
-            strncpy(g_mqtt_config.client_id, value, sizeof(g_mqtt_config.client_id) - 1);
+            g_ai_config.ig_threshold = atoi(value);
+        }
+        else if (strcmp(key, "ai_ig_on_time") == 0)
+        {
+            g_ai_config.ig_on_time = atoi(value);
+        }
+        else if (strcmp(key, "ai_ig_off_time") == 0)
+        {
+            g_ai_config.ig_off_time = atoi(value);
+        }
+        /* 解析需量設定 */
+        else if (strcmp(key, "demand_alarm1") == 0)
+        {
+            g_demand_config.demand_alarm1 = atoi(value);
+        }
+        else if (strcmp(key, "demand_alarm2") == 0)
+        {
+            g_demand_config.demand_alarm2 = atoi(value);
+        }
+        else if (strcmp(key, "pulse_const") == 0)
+        {
+            g_demand_config.pulse_const = atoi(value);
+        }
+        else if (strcmp(key, "modem_ip") == 0)
+        {
+            sscanf(value, "%hhu.%hhu.%hhu.%hhu",
+                   &g_demand_config.modem_ip[0],
+                   &g_demand_config.modem_ip[1],
+                   &g_demand_config.modem_ip[2],
+                   &g_demand_config.modem_ip[3]);
+        }
+        else if (strcmp(key, "modem_apn") == 0)
+        {
+            strncpy(g_demand_config.apn, value, sizeof(g_demand_config.apn) - 1);
+        }
+        /* 解析 MQTT 設定 */
+        else if (strcmp(key, "mqtt_server_port") == 0)
+        {
+            g_mqtt_config.server_port = atoi(value);
         }
         else if (strcmp(key, "mqtt_server_url") == 0)
         {
             strncpy(g_mqtt_config.server_url, value, sizeof(g_mqtt_config.server_url) - 1);
         }
+        else if (strcmp(key, "mqtt_client_id") == 0)
+        {
+            strncpy(g_mqtt_config.client_id, value, sizeof(g_mqtt_config.client_id) - 1);
+        }
+        else if (strcmp(key, "mqtt_username") == 0)
+        {
+            strncpy(g_mqtt_config.username, value, sizeof(g_mqtt_config.username) - 1);
+        }
+        else if (strcmp(key, "mqtt_password") == 0)
+        {
+            strncpy(g_mqtt_config.password, value, sizeof(g_mqtt_config.password) - 1);
+        }
+        /* 解析設備資訊 */
+        else if (strcmp(key, "device_name") == 0)
+        {
+            strncpy(g_device_info.device_name, value, sizeof(g_device_info.device_name) - 1);
+        }
+        else if (strcmp(key, "device_location") == 0)
+        {
+            strncpy(g_device_info.location, value, sizeof(g_device_info.location) - 1);
+        }
+        /* 解析計量參數 */
+        else
+        {
+            for (int i = 0; i < 6; i++)
+            {
+                char key_name[64];
 
-        /* ...其他設定類似處理... */
+                snprintf(key_name, sizeof(key_name), "meter_ct_ratio_%d", i);
+                if (strcmp(key, key_name) == 0)
+                {
+                    g_meter_config.ct_ratio[i] = atoi(value);
+                    break;
+                }
+
+                snprintf(key_name, sizeof(key_name), "meter_ch_igain_%d", i);
+                if (strcmp(key, key_name) == 0)
+                {
+                    g_meter_config.ch_igain[i] = atoi(value);
+                    break;
+                }
+            }
+        }
     }
-#endif
-
-    fs_close(&file);
 
     LOG_INF("Settings loaded from flash");
     return 0;

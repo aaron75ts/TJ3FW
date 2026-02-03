@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <errno.h>
+#include <stdio.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -18,6 +19,7 @@
 #include "fs_handler.h"
 #include "di.h"
 #include "pulse.h"
+#include "button.h" /* 加入按鈕模組 */
 
 LOG_MODULE_REGISTER(ble_gatt, LOG_LEVEL_INF);
 
@@ -181,6 +183,16 @@ static void protocol_handler(struct bt_conn *conn, const protocol_packet_t *pack
     case OP_BLE_SET_AI_CONFIG:
         LOG_INF("CMD: Set AI Config (DI Timing)");
         {
+            /* ⚠️ 安全檢查：必須處於設定模式才能修改 */
+            if (!button_is_set_mode_enabled())
+            {
+                LOG_WRN("Rejected Set AI Config: Set Mode not enabled");
+                LOG_WRN("Please long-press 'S' button for 3 seconds");
+                uint8_t error = 0xFE; /* 授權錯誤 */
+                tx_len = protocol_compose(op_code, &error, 1, tx_buf, sizeof(tx_buf));
+                break;
+            }
+
             // Payload: [DI1_ON_L][DI1_ON_H][DI1_OFF_L][DI1_OFF_H][DI2_ON_L][DI2_ON_H][DI2_OFF_L][DI2_OFF_H]
             if (packet->payload_len != 8)
             {
@@ -210,7 +222,7 @@ static void protocol_handler(struct bt_conn *conn, const protocol_packet_t *pack
                 // 成功：Echo 回原始 payload
                 tx_len = protocol_compose(op_code, packet->payload,
                                           packet->payload_len, tx_buf, sizeof(tx_buf));
-                LOG_INF("DI config updated successfully");
+                LOG_INF("DI config updated successfully (Set Mode active)");
             }
             else
             {
@@ -343,13 +355,21 @@ static ssize_t read_meter_config(struct bt_conn *conn, const struct bt_gatt_attr
 static ssize_t write_meter_config(struct bt_conn *conn, const struct bt_gatt_attr *attr,
                                   const void *buf, uint16_t len, uint16_t offset, uint8_t flags)
 {
+    /* ⚠️ 安全檢查：必須處於設定模式才能修改 */
+    if (!button_is_set_mode_enabled())
+    {
+        LOG_WRN("Rejected Meter Config write: Set Mode not enabled");
+        LOG_WRN("Please long-press 'S' button for 3 seconds");
+        return BT_GATT_ERR(BT_ATT_ERR_AUTHORIZATION);
+    }
+
     if (offset + len > sizeof(meter_config))
     {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
     }
 
     memcpy(meter_config + offset, buf, len);
-    LOG_INF("Meter Config updated");
+    LOG_INF("Meter Config updated (Set Mode active)");
 
     return len;
 }

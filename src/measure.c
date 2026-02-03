@@ -34,12 +34,6 @@ static ai_config_t ai_cfg;
 #define DEG_TO_RAD(deg) ((deg) * PI / 180.0f)
 #define RAD_TO_DEG(rad) ((rad) * 180.0f / PI)
 
-/* CH1 & CH2 增益常數 (經過隔離變壓器) */
-#define CH12_GAIN_CONST (20000.0f * 0.4f)
-
-/* CH3 ~ CH6 增益常數 (差動負載) */
-#define CH36_GAIN_CONST (200.0f)
-
 /* 三相 30 度的 cos 值 */
 #define COS_30 (0.866025403784f)
 
@@ -52,11 +46,28 @@ static int measure_get_atm_devices(void)
     atm2_dev = DEVICE_DT_GET(DT_NODELABEL(atm2));
     atm3_dev = DEVICE_DT_GET(DT_NODELABEL(atm3));
 
-    if (!device_is_ready(atm1_dev) || !device_is_ready(atm2_dev) || !device_is_ready(atm3_dev))
+    LOG_INF("Checking ATM90E26 devices...");
+
+    if (!device_is_ready(atm1_dev))
     {
-        LOG_ERR("ATM90E26 devices not ready");
+        LOG_ERR("ATM1 device not ready");
         return -ENODEV;
     }
+    LOG_INF("ATM1 ready");
+
+    if (!device_is_ready(atm2_dev))
+    {
+        LOG_ERR("ATM2 device not ready");
+        return -ENODEV;
+    }
+    LOG_INF("ATM2 ready");
+
+    if (!device_is_ready(atm3_dev))
+    {
+        LOG_ERR("ATM3 device not ready");
+        return -ENODEV;
+    }
+    LOG_INF("ATM3 ready");
 
     return 0;
 }
@@ -149,12 +160,24 @@ int measure_read_raw_data(void)
     {
         LOG_WRN("Failed to read CH1");
     }
+    else
+    {
+        LOG_INF("CH1 raw: V=%u, I=%u, P=%u, Phase=%u",
+                channel_data[CH1].raw_voltage, channel_data[CH1].raw_current,
+                channel_data[CH1].raw_power, channel_data[CH1].raw_phase_angle);
+    }
 
     /* CH2: ATM1 N-line (需要額外處理，因為是 current2) */
     ret = read_atm_channel(atm1_dev, &channel_data[CH2]);
     if (ret < 0)
     {
         LOG_WRN("Failed to read CH2");
+    }
+    else
+    {
+        LOG_INF("CH2 raw: V=%u, I=%u, P=%u, Phase=%u",
+                channel_data[CH2].raw_voltage, channel_data[CH2].raw_current,
+                channel_data[CH2].raw_power, channel_data[CH2].raw_phase_angle);
     }
 
     /* CH3: ATM2 L-line */
@@ -163,12 +186,24 @@ int measure_read_raw_data(void)
     {
         LOG_WRN("Failed to read CH3");
     }
+    else
+    {
+        LOG_INF("CH3 raw: V=%u, I=%u, P=%u, Phase=%u",
+                channel_data[CH3].raw_voltage, channel_data[CH3].raw_current,
+                channel_data[CH3].raw_power, channel_data[CH3].raw_phase_angle);
+    }
 
     /* CH4: ATM2 N-line */
     ret = read_atm_channel(atm2_dev, &channel_data[CH4]);
     if (ret < 0)
     {
         LOG_WRN("Failed to read CH4");
+    }
+    else
+    {
+        LOG_INF("CH4 raw: V=%u, I=%u, P=%u, Phase=%u",
+                channel_data[CH4].raw_voltage, channel_data[CH4].raw_current,
+                channel_data[CH4].raw_power, channel_data[CH4].raw_phase_angle);
     }
 
     /* CH5: ATM3 L-line */
@@ -177,12 +212,24 @@ int measure_read_raw_data(void)
     {
         LOG_WRN("Failed to read CH5");
     }
+    else
+    {
+        LOG_INF("CH5 raw: V=%u, I=%u, P=%u, Phase=%u",
+                channel_data[CH5].raw_voltage, channel_data[CH5].raw_current,
+                channel_data[CH5].raw_power, channel_data[CH5].raw_phase_angle);
+    }
 
     /* CH6: ATM3 N-line */
     ret = read_atm_channel(atm3_dev, &channel_data[CH6]);
     if (ret < 0)
     {
         LOG_WRN("Failed to read CH6");
+    }
+    else
+    {
+        LOG_INF("CH6 raw: V=%u, I=%u, P=%u, Phase=%u",
+                channel_data[CH6].raw_voltage, channel_data[CH6].raw_current,
+                channel_data[CH6].raw_power, channel_data[CH6].raw_phase_angle);
     }
 
     /* CH7: Ig 地絡電流 (特殊處理) */
@@ -195,7 +242,11 @@ int measure_read_raw_data(void)
 /**
  * @brief 計算 CH1 或 CH2 的實際電流 (經過隔離變壓器)
  *
- * Real_Irms = raw_value / (CT_ratio * 20000 * 0.4 * CH_Igain)
+ * 公式: 實際電流 = (暫存器讀值 / 1000) × Ratio / Igain調整值
+ * 其中:
+ *   - 暫存器讀值為 ATM90E26 格式 XX.XXX (需除以 1000)
+ *   - Ratio: CT比值 (例如 ZCT=400, CT=100)
+ *   - Igain: 軟體校正係數
  */
 static float calculate_ch12_current(uint16_t raw_value, uint16_t ct_ratio, uint16_t ch_igain)
 {
@@ -204,14 +255,22 @@ static float calculate_ch12_current(uint16_t raw_value, uint16_t ct_ratio, uint1
         return 0.0f;
     }
 
-    float total_gain = (float)ct_ratio * CH12_GAIN_CONST * (float)ch_igain;
-    return (float)raw_value / total_gain;
+    /* 實際電流 = (raw_value / 1000) * Ratio / Igain */
+    float base_current = (float)raw_value / 1000.0f;        /* 轉換為基本安培數 */
+    float scaled_current = base_current * (float)ct_ratio;  /* 套用 CT 比值 */
+    float final_current = scaled_current / (float)ch_igain; /* 軟體校正 */
+
+    return final_current;
 }
 
 /**
  * @brief 計算 CH3~CH6 的實際電流 (差動負載)
  *
- * Real_Irms = raw_value / (CT_ratio * 200 * CH_Igain)
+ * 公式: 實際電流 = (暫存器讀值 / 1000) × Ratio / Igain調整值
+ * 其中:
+ *   - 暫存器讀值為 ATM90E26 格式 XX.XXX (需除以 1000)
+ *   - Ratio: CT比值 (例如 ZCT=400, CT=100)
+ *   - Igain: 軟體校正係數
  */
 static float calculate_ch36_current(uint16_t raw_value, uint16_t ct_ratio, uint16_t ch_igain)
 {
@@ -220,8 +279,12 @@ static float calculate_ch36_current(uint16_t raw_value, uint16_t ct_ratio, uint1
         return 0.0f;
     }
 
-    float total_gain = (float)ct_ratio * CH36_GAIN_CONST * (float)ch_igain;
-    return (float)raw_value / total_gain;
+    /* 實際電流 = (raw_value / 1000) * Ratio / Igain */
+    float base_current = (float)raw_value / 1000.0f;        /* 轉換為基本安培數 */
+    float scaled_current = base_current * (float)ct_ratio;  /* 套用 CT 比值 */
+    float final_current = scaled_current / (float)ch_igain; /* 軟體校正 */
+
+    return final_current;
 }
 
 int measure_calculate_channel(channel_t ch)
@@ -268,7 +331,7 @@ int measure_calculate_channel(channel_t ch)
     /* 計算 Io (零相電流，單位 mA) */
     data->io = data->current * 1000.0f; // A -> mA
 
-    LOG_DBG("CH%d: V=%.2f, I=%.3f, P=%.1f, θ=%.1f, Io=%.1f",
+    LOG_INF("CH%d: V=%.2f, I=%.3f, P=%.1f, θ=%.1f, Io=%.1f",
             ch + 1, (double)data->voltage, (double)data->current, (double)data->power,
             (double)data->phase_angle, (double)data->io);
 
@@ -380,7 +443,7 @@ float measure_calculate_ior(channel_t ch, float io, float phase_angle,
         channel_data[ch].ior = ior;
     }
 
-    LOG_DBG("CH%d Ior calc: Io=%.1f, θ=%.1f, α=%.1f, Ior=%.1f (%s)",
+    LOG_INF("CH%d Ior calc: Io=%.1f, θ=%.1f, α=%.1f, Ior=%.1f (%s)",
             ch + 1, (double)io, (double)phase_angle, (double)alpha, (double)ior,
             phase_type == PHASE_SINGLE ? "single" : "three");
 
@@ -391,7 +454,7 @@ int measure_perform_cycle(void)
 {
     int ret;
 
-    LOG_DBG("Starting measurement cycle...");
+    LOG_INF("Starting measurement cycle...");
 
     /* 1. 讀取原始數據 */
     ret = measure_read_raw_data();
@@ -436,11 +499,11 @@ int measure_perform_cycle(void)
         ret = measure_calculate_three_phase(CH1, CH3, &three_phase);
         if (ret == 0)
         {
-            LOG_DBG("Three-phase synthesis completed");
+            LOG_INF("Three-phase synthesis completed");
         }
     }
 
-    LOG_DBG("Measurement cycle completed");
+    LOG_INF("Measurement cycle completed");
     return 0;
 }
 
@@ -503,13 +566,13 @@ int measure_send_log_output(phase_type_t phase_type, uint32_t pulse_count)
     {
         /* 單相格式 */
         offset += snprintf(log_buffer + offset, sizeof(log_buffer) - offset,
-                           "AC 1 PH\r\n");
+                           "AC 1 PH\n");
 
         /* CH1: Io, Ior, PH */
         if (channel_data[CH1].is_valid)
         {
             offset += snprintf(log_buffer + offset, sizeof(log_buffer) - offset,
-                               "CH1: Io=%4.0fmA, Ior=%4.0fmA, PH=%3.0f°\r\n",
+                               "CH1: Io=%4.0fmA, Ior=%4.0fmA, PH=%3.0f º\n",
                                (double)channel_data[CH1].io,
                                (double)channel_data[CH1].ior,
                                (double)channel_data[CH1].phase_angle);
@@ -519,7 +582,7 @@ int measure_send_log_output(phase_type_t phase_type, uint32_t pulse_count)
         if (channel_data[CH2].is_valid)
         {
             offset += snprintf(log_buffer + offset, sizeof(log_buffer) - offset,
-                               "CH2: Io=%4.0fmA, Ior=%4.0fmA, PH=%3.0f°\r\n",
+                               "CH2: Io=%4.0fmA, Ior=%4.0fmA,  PH=%3.0f º\n",
                                (double)channel_data[CH2].io,
                                (double)channel_data[CH2].ior,
                                (double)channel_data[CH2].phase_angle);
@@ -529,7 +592,7 @@ int measure_send_log_output(phase_type_t phase_type, uint32_t pulse_count)
         if (channel_data[CH3].is_valid)
         {
             offset += snprintf(log_buffer + offset, sizeof(log_buffer) - offset,
-                               "CH3: Irms=%2.3fA, PH=%3.0f°\r\n",
+                               "CH3: Irms=%2.3fA,  PH=%3.0f º\n",
                                (double)channel_data[CH3].current,
                                (double)channel_data[CH3].phase_angle);
         }
@@ -538,7 +601,7 @@ int measure_send_log_output(phase_type_t phase_type, uint32_t pulse_count)
         if (channel_data[CH4].is_valid)
         {
             offset += snprintf(log_buffer + offset, sizeof(log_buffer) - offset,
-                               "CH4: Irms=%2.3fA, PH=%3.0f°\r\n",
+                               "CH4: Irms=%2.3fA,  PH=%3.0f º\n",
                                (double)channel_data[CH4].current,
                                (double)channel_data[CH4].phase_angle);
         }
@@ -547,7 +610,7 @@ int measure_send_log_output(phase_type_t phase_type, uint32_t pulse_count)
         if (channel_data[CH5].is_valid)
         {
             offset += snprintf(log_buffer + offset, sizeof(log_buffer) - offset,
-                               "CH5: Irms=%2.3fA, PH=%3.0f°\r\n",
+                               "CH5: Irms=%2.3fA,  PH=%3.0f º\n",
                                (double)channel_data[CH5].current,
                                (double)channel_data[CH5].phase_angle);
         }
@@ -556,7 +619,7 @@ int measure_send_log_output(phase_type_t phase_type, uint32_t pulse_count)
         if (channel_data[CH6].is_valid)
         {
             offset += snprintf(log_buffer + offset, sizeof(log_buffer) - offset,
-                               "CH6: Irms=%2.3fA, PH=%3.0f°\r\n",
+                               "CH6: Irms=%2.3fA,  PH=%3.0f º\n",
                                (double)channel_data[CH6].current,
                                (double)channel_data[CH6].phase_angle);
         }
@@ -565,13 +628,13 @@ int measure_send_log_output(phase_type_t phase_type, uint32_t pulse_count)
     {
         /* 三相格式 */
         offset += snprintf(log_buffer + offset, sizeof(log_buffer) - offset,
-                           "AC 3 PH\r\n");
+                           "AC 3 PH\n");
 
         /* CH1: Io, Ior, PH */
         if (channel_data[CH1].is_valid)
         {
             offset += snprintf(log_buffer + offset, sizeof(log_buffer) - offset,
-                               "CH1: Io=%4.0fmA, Ior=%4.0fmA, PH=%3.0f°\r\n",
+                               "CH1: Io=%4.0fmA, Ior=%4.0fmA,  PH=%3.0f º\n",
                                (double)channel_data[CH1].io,
                                (double)channel_data[CH1].ior,
                                (double)channel_data[CH1].phase_angle);
@@ -581,7 +644,7 @@ int measure_send_log_output(phase_type_t phase_type, uint32_t pulse_count)
         if (channel_data[CH2].is_valid)
         {
             offset += snprintf(log_buffer + offset, sizeof(log_buffer) - offset,
-                               "CH2: Io=%4.0fmA, Ior=%4.0fmA, PH=%3.0f°\r\n",
+                               "CH2: Io=%4.0fmA, Ior=%4.0fmA,  PH=%3.0f º\n",
                                (double)channel_data[CH2].io,
                                (double)channel_data[CH2].ior,
                                (double)channel_data[CH2].phase_angle);
@@ -592,7 +655,7 @@ int measure_send_log_output(phase_type_t phase_type, uint32_t pulse_count)
         {
             float combined_current = channel_data[CH3].current + channel_data[CH4].current;
             offset += snprintf(log_buffer + offset, sizeof(log_buffer) - offset,
-                               "CH3/4: Irms=%2.3fA, PH=%3.0f°\r\n",
+                               "CH3/4: Irms=%2.3fA,  PH=%3.0f º\n",
                                (double)combined_current,
                                (double)channel_data[CH3].phase_angle);
         }
@@ -602,7 +665,7 @@ int measure_send_log_output(phase_type_t phase_type, uint32_t pulse_count)
         {
             float combined_current = channel_data[CH5].current + channel_data[CH6].current;
             offset += snprintf(log_buffer + offset, sizeof(log_buffer) - offset,
-                               "CH5/6: Irms=%2.3fA, PH=%3.0f°\r\n",
+                               "CH5/6: Irms=%2.3fA,  PH=%3.0f º\n",
                                (double)combined_current,
                                (double)channel_data[CH5].phase_angle);
         }
@@ -610,7 +673,14 @@ int measure_send_log_output(phase_type_t phase_type, uint32_t pulse_count)
 
     /* PULSE 累積度數 */
     offset += snprintf(log_buffer + offset, sizeof(log_buffer) - offset,
-                       "PULSE: %07u\r\n", pulse_count);
+                       "PULSE: %07u\n", pulse_count);
+
+    /* 檢查訊息長度是否符合 ext_comm_send_log 的要求 (1-240 bytes) */
+    if (offset <= 0 || offset > 240)
+    {
+        LOG_ERR("Log message length invalid: %d (must be 1-240)", offset);
+        return -EINVAL;
+    }
 
     /* 透過 UART30 發送 */
     int ret = ext_comm_send_log(log_buffer);
@@ -620,6 +690,6 @@ int measure_send_log_output(phase_type_t phase_type, uint32_t pulse_count)
         return ret;
     }
 
-    LOG_DBG("Sent measurement log (%d bytes)", offset);
+    LOG_INF("Sent measurement log (%d bytes)", offset);
     return 0;
 }

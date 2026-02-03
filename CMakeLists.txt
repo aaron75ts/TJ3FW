@@ -15,6 +15,7 @@ target_sources(app PRIVATE
     src/fs_handler.c
     src/ext_comm.c
     src/di.c
+    src/button.c
     src/settings.c
     src/measure.c
     src/pulse.c

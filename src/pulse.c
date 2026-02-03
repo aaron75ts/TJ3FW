@@ -17,9 +17,6 @@ LOG_MODULE_REGISTER(pulse, LOG_LEVEL_INF);
 /* GPIO 定義 */
 static const struct gpio_dt_spec pulse_gpio = GPIO_DT_SPEC_GET(DT_NODELABEL(pulse_out), gpios);
 
-/* GPIO 回調結構 */
-static struct gpio_callback pulse_cb_data;
-
 /* 脈衝數據 */
 static pulse_data_t pulse_data = {
     .pulse_count = 0,
@@ -45,10 +42,9 @@ static uint32_t pulse_off_time = 0;
 static struct k_timer demand_timer;
 
 /* 前向聲明 */
-static void pulse_gpio_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins);
+/* static void pulse_gpio_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins); */
 static void demand_timer_handler(struct k_timer *timer);
 static void update_demand_calculation(void);
-static void pulse_poff_callback(void);
 static void pulse_poff_callback(void);
 
 /**
@@ -58,8 +54,8 @@ static void pulse_poff_callback(void);
  */
 static void calculate_kwh(void)
 {
-    // pulse_coefficient 是 Big Endian，單位是 0.0001 kWh/pulse
-    // 例如 0x0000000C = 12 = 0.0012 kWh/pulse
+    // pulse_coefficient 是 Little Endian，單位是 0.0001 kWh/pulse
+    // 例如 0x0C000000 = 12 = 0.0012 kWh/pulse
     float coefficient_kwh = (float)pulse_data.pulse_coefficient / 10000.0f;
     pulse_data.total_kwh = (float)pulse_data.pulse_count * coefficient_kwh;
 }
@@ -87,7 +83,9 @@ static void calculate_frequency(void)
 
 /**
  * @brief GPIO 中斷回調
+ * Note: Currently disabled as hardware does not support GPIO interrupts
  */
+#if 0
 static void pulse_gpio_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
     uint32_t current_time = k_uptime_get_32();
@@ -134,6 +132,7 @@ static void pulse_gpio_callback(const struct device *dev, struct gpio_callback *
 
     last_pulse_state = current_pulse_state;
 }
+#endif
 
 /**
  * @brief 需量計算定時器回調 (每 30 秒)
@@ -206,17 +205,9 @@ int pulse_init(void)
         return ret;
     }
 
-    /* 配置中斷 (雙邊觸發) */
-    ret = gpio_pin_interrupt_configure_dt(&pulse_gpio, GPIO_INT_EDGE_BOTH);
-    if (ret < 0)
-    {
-        LOG_ERR("Failed to configure pulse interrupt: %d", ret);
-        return ret;
-    }
-
-    /* 初始化並註冊 GPIO 回調 */
-    gpio_init_callback(&pulse_cb_data, pulse_gpio_callback, BIT(pulse_gpio.pin));
-    gpio_add_callback(pulse_gpio.port, &pulse_cb_data);
+    /* Note: GPIO interrupt not supported on this hardware (-ENOTSUP)
+     * Using polling mode instead via demand_timer */
+    LOG_INF("Pulse monitoring using polling mode (interrupts not supported)");
 
     /* 從 Flash 載入脈衝計數 */
     pulse_load_from_flash();

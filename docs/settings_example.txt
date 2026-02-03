@@ -1,0 +1,130 @@
+# TJ3-nRF Settings File
+# 格式: key=value
+# 此檔案儲存於 External SPI Flash: /lfs/settings.txt
+
+# ============================================================
+# AI 監控設定 (ai_config_t) - OP Code 0xB5
+# ============================================================
+
+# CH1 設定
+ai_alarm_type_0=1
+ai_phase_type_0=1
+ai_phase_corr_0=0
+ai_zct_ratio_0=1
+ai_light_leak_th_0=100
+ai_heavy_leak_th_0=500
+ai_leak_on_time_0=5
+ai_leak_off_time_0=10
+
+# CH2 設定
+ai_alarm_type_1=1
+ai_phase_type_1=1
+ai_phase_corr_1=0
+ai_zct_ratio_1=1
+ai_light_leak_th_1=100
+ai_heavy_leak_th_1=500
+ai_leak_on_time_1=5
+ai_leak_off_time_1=10
+
+# CH3 設定
+ai_alarm_type_2=3
+ai_phase_type_2=1
+ai_phase_corr_2=0
+ai_zct_ratio_2=0
+ai_light_leak_th_2=200
+ai_heavy_leak_th_2=800
+ai_leak_on_time_2=3
+ai_leak_off_time_2=8
+
+# CH4 設定
+ai_alarm_type_3=3
+ai_phase_type_3=1
+ai_phase_corr_3=0
+ai_zct_ratio_3=0
+ai_light_leak_th_3=200
+ai_heavy_leak_th_3=800
+ai_leak_on_time_3=3
+ai_leak_off_time_3=8
+
+# CH5 設定
+ai_alarm_type_4=3
+ai_phase_type_4=3
+ai_phase_corr_4=1
+ai_zct_ratio_4=0
+ai_light_leak_th_4=150
+ai_heavy_leak_th_4=600
+ai_leak_on_time_4=5
+ai_leak_off_time_4=10
+
+# CH6 設定
+ai_alarm_type_5=3
+ai_phase_type_5=3
+ai_phase_corr_5=1
+ai_zct_ratio_5=0
+ai_light_leak_th_5=150
+ai_heavy_leak_th_5=600
+ai_leak_on_time_5=5
+ai_leak_off_time_5=10
+
+# 地絡 (Ig) 設定
+ai_ig_threshold=1000
+ai_ig_on_time=10
+ai_ig_off_time=20
+
+# ============================================================
+# 需量與 Modem 設定 (demand_config_t) - OP Code 0xE5
+# ============================================================
+
+# 需量警報 (kW)
+demand_alarm1=50
+demand_alarm2=100
+
+# 脈衝係數
+pulse_const=1000
+
+# Modem 設定
+modem_ip=192.168.1.1
+modem_apn=internet
+
+# ============================================================
+# MQTT 客戶端設定 (mqtt_config_t) - OP Code 0xA5
+# ============================================================
+
+# MQTT 伺服器連線 (URL 支援 mqtt://ip:port 格式)
+mqtt_server_port=1883
+mqtt_server_url=mqtt://172.31.33.250:1883
+
+# MQTT 認證資訊
+mqtt_client_id=TJ3_NODE_000001
+mqtt_username=
+mqtt_password=
+
+# ============================================================
+# 設備資訊 (device_info_t) - OP Code 0xD5
+# ============================================================
+
+device_name=TJ3-Factory-Main
+device_location=Building A, Floor 3, Room 301
+
+# ============================================================
+# 計量校正參數 (meter_config_t) - BLE UUID 8c02
+# ============================================================
+
+# CT 變流器比例 (CT Ratio)
+# 用於電流計算公式: 實際電流 = (raw_value / 1000) × ct_ratio / ch_igain
+meter_ct_ratio_0=400  # CH1 (ATM1 L-line)
+meter_ct_ratio_1=400  # CH2 (ATM1 N-line)
+meter_ct_ratio_2=100  # CH3 (ATM2 L-line)
+meter_ct_ratio_3=100  # CH4 (ATM2 N-line)
+meter_ct_ratio_4=100  # CH5 (ATM3 L-line)
+meter_ct_ratio_5=100  # CH6 (ATM3 N-line)
+
+# 通道增益校正值 (Igain)
+# 每個通道對應一條線路，L線和N線分別校正
+# ATM90E26 的 IgainL (32H) 和 IgainN (33H) 透過各通道設定
+meter_ch_igain_0=100  # CH1 (ATM1 L-line, 對應 IgainL)
+meter_ch_igain_1=100  # CH2 (ATM1 N-line, 對應 IgainN)
+meter_ch_igain_2=100  # CH3 (ATM2 L-line, 對應 IgainL)
+meter_ch_igain_3=100  # CH4 (ATM2 N-line, 對應 IgainN)
+meter_ch_igain_4=100  # CH5 (ATM3 L-line, 對應 IgainL)
+meter_ch_igain_5=100  # CH6 (ATM3 N-line, 對應 IgainN)

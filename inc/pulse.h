@@ -25,7 +25,7 @@ extern "C"
     typedef struct
     {
         uint32_t pulse_count;       /**< 累積脈衝計數 */
-        uint32_t pulse_coefficient; /**< 脈衝係數 (Big Endian, 單位: 0.0001 kWh/pulse) */
+        uint32_t pulse_coefficient; /**< 脈衝係數 (Little Endian, 單位: 0.0001 kWh/pulse) */
         float total_kwh;            /**< 累積電量 (kWh) */
         float current_power;        /**< 現在電力 (kW) */
         float predicted_power;      /**< 預測電力 (kW) */
@@ -71,7 +71,7 @@ extern "C"
 
     /**
      * @brief 設定脈衝係數
-     * @param coefficient 脈衝係數 (Big Endian, 例如 0.0012 = 0x0000000C)
+     * @param coefficient 脈衝係數 (Little Endian, 例如 0.0012 = 0x0C000000)
      */
     void pulse_set_coefficient(uint32_t coefficient);
 

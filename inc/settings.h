@@ -68,30 +68,32 @@ typedef struct
     uint16_t ig_off_time;  /**< 地絡復歸時間 (秒) */
 } ai_config_t;
 
-/* 通訊與需量設定 (OP Code 0xE5) */
+/* 需量與 Modem 設定 (OP Code 0xE5) */
 typedef struct
 {
-    /* MQTT 伺服器 */
-    uint8_t server_ip[4]; /**< 伺服器 IP (Big Endian) */
-    uint16_t server_port; /**< 伺服器 Port (Little Endian) */
-
     /* 需量警報 (kW) */
     uint16_t demand_alarm1; /**< 目標電力 */
     uint16_t demand_alarm2; /**< 限界電力 */
 
     /* 脈衝係數 */
-    uint32_t pulse_const; /**< 脈衝係數 (Big Endian) */
+    uint32_t pulse_const; /**< 脈衝係數 (Little Endian) */
 
     /* Modem 設定 */
     uint8_t modem_ip[4]; /**< Modem IP */
     char apn[64];        /**< APN 名稱 */
-} comm_demand_config_t;
+} demand_config_t;
 
 /* MQTT 客戶端設定 (OP Code 0xA5) */
 typedef struct
 {
-    char client_id[17];  /**< MQTT Client ID (16 bytes + null) */
-    char server_url[81]; /**< MQTT Server URL (80 bytes + null) */
+    /* 連線設定 */
+    char server_url[81];  /**< MQTT Server URL (80 bytes + null), 支援 mqtt://ip:port 格式 */
+    uint16_t server_port; /**< MQTT 伺服器 Port (Little Endian, 可選) */
+
+    /* 認證資訊 */
+    char client_id[17]; /**< MQTT Client ID (16 bytes + null) */
+    char username[33];  /**< MQTT Username (32 bytes + null) */
+    char password[33];  /**< MQTT Password (32 bytes + null) */
 } mqtt_config_t;
 
 /* 設備名稱與位置 (OP Code 0xD5) */
@@ -134,20 +136,20 @@ int settings_get_ai_config(ai_config_t *config);
 int settings_set_ai_config(const ai_config_t *config);
 
 /**
- * @brief 獲取通訊與需量設定
+ * @brief 獲取需量與 Modem 設定
  *
  * @param config 輸出參數
  * @return 0 成功
  */
-int settings_get_comm_demand_config(comm_demand_config_t *config);
+int settings_get_demand_config(demand_config_t *config);
 
 /**
- * @brief 設定通訊與需量參數
+ * @brief 設定需量與 Modem 參數
  *
- * @param config 新的設定值
- * @return 0 成功，負值為錯誤碼
+ * @param config 輸入參數
+ * @return 0 成功
  */
-int settings_set_comm_demand_config(const comm_demand_config_t *config);
+int settings_set_demand_config(const demand_config_t *config);
 
 /**
  * @brief 獲取 MQTT 設定

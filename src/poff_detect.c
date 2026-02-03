@@ -180,7 +180,7 @@ int poff_detect_register_callback(poff_callback_t callback)
     }
 
     callbacks[callback_count++] = callback;
-    LOG_DBG("Registered power-off callback #%d", callback_count);
+    LOG_INF("Registered power-off callback #%d", callback_count);
 
     return 0;
 }

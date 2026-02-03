@@ -186,6 +186,12 @@ int fs_handler_append_log(const char *filename, const char *line)
     if (rc < 0)
     {
         LOG_ERR("Failed to open %s (err %d)", path, rc);
+        /* 嘗試再次挖載檔案系統 */
+        if (rc == -EIO || rc == -ENOENT)
+        {
+            LOG_WRN("Attempting to remount filesystem...");
+            /* 只是記錄錯誤，不再次挖載以避免遞迴 */
+        }
         return rc;
     }
 

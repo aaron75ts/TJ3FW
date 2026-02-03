@@ -158,7 +158,7 @@ characteristic.write(packet)
 
 ## 注意事項
 
-1. **Little Endian**: 大部分數值使用 Little Endian (LSB first)，但 IP 地址使用 Big Endian
+1. **Little Endian**: 所有數值統一使用 Little Endian (LSB first)
 2. **S 按鈕**: BLE 修改設定前需長按 S 按鈕 3 秒解鎖
 3. **Flash 寫入**: 設定值變更會自動保存到 Flash (settings.txt)
 4. **ATM90E26 重載**: 修改計量參數後需要重新初始化 ATM90E26

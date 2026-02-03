@@ -8,13 +8,20 @@ static const struct device *flash_dev = DEVICE_DT_GET(DT_NODELABEL(mx25r64));
 
 int spi_flash_init(void)
 {
+    LOG_INF("Initializing SPI flash device...");
+
     if (!device_is_ready(flash_dev))
     {
         LOG_ERR("Flash device %s is not ready", flash_dev->name);
+        LOG_ERR("Check Device Tree configuration and SPI pins");
         return -ENODEV;
     }
 
     LOG_INF("Flash device %s is ready", flash_dev->name);
+
+    /* 給 flash 一點時間初始化 */
+    k_sleep(K_MSEC(10));
+
     return 0;
 }
 

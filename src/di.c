@@ -58,8 +58,8 @@ static int di_channel_init(di_channel_info_t *info, const struct gpio_dt_spec *g
 
     info->gpio = gpio;
     info->channel = channel;
-    info->current_state = DI_STATE_NORMAL;
-    info->last_stable_state = DI_STATE_NORMAL;
+    info->current_state = DI_STATE_ALERT;
+    info->last_stable_state = DI_STATE_ALERT;
     info->config.on_time = 3;  // 預設 3 秒
     info->config.off_time = 3; // 預設 3 秒
     info->countdown = 0;
@@ -251,14 +251,16 @@ static void di_log_to_flash(di_channel_t channel, di_state_t state)
              state == DI_STATE_ALERT ? "ALERT" : "NORMAL");
 
     /* 寫入到日誌檔案 */
-    int ret = fs_handler_append_log("/lfs/di_events.csv", log_line);
+    int ret = fs_handler_append_log("di_events.csv", log_line);
     if (ret < 0)
     {
-        LOG_ERR("Failed to log DI%d event to Flash: %d", channel, ret);
-        return;
+        LOG_WRN("Failed to log DI%d event to Flash: %d (continuing anyway)", channel, ret);
+        /* 不返回錯誤，允許系統繼續運行 */
     }
-
-    LOG_DBG("DI%d event logged: %s", channel, log_line);
+    else
+    {
+        LOG_DBG("DI%d event logged: %s", channel, log_line);
+    }
 
     /* TODO: 實現 1 分鐘值記錄 (90天) 和 30 分鐘值記錄 (1年) 的管理 */
 }

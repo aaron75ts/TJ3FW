@@ -117,6 +117,7 @@ extern "C"
         uint16_t phase_angle2;    /* Pangle2 (6DH) */
         uint16_t energy_active_p; /* APenergy (40H) - Active Positive Energy */
         uint16_t energy_active_n; /* ANenergy (41H) - Active Negative Energy */
+        bool initialized;         /* Initialization status flag */
     };
 
 #ifdef __cplusplus
