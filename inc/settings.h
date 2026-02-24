@@ -198,7 +198,21 @@ int settings_get_meter_config(meter_config_t *config);
  * @return 0 成功，負值為錯誤碼
  */
 int settings_set_meter_config(const meter_config_t *config);
+/**
+ * @brief 獲取 Log Level
+ *
+ * @param level 輸出參數 (0=OFF 1=ERR 2=WRN 3=INF 4=DBG)
+ * @return 0 成功
+ */
+int settings_get_log_level(uint8_t *level);
 
+/**
+ * @brief 設定並持久化 Log Level
+ *
+ * @param level 新的 Log Level (0=OFF 1=ERR 2=WRN 3=INF 4=DBG)
+ * @return 0 成功，負値為錯誤碼
+ */
+int settings_set_log_level(uint8_t level);
 /**
  * @brief 將所有設定值保存到 Flash
  *

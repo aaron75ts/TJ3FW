@@ -1,4 +1,23 @@
 {
-    "nrf-connect.applications": [],
+    "nrf-connect.applications": [
+        {
+            "appFolder": "${workspaceFolder}",
+            "buildConfigurations": [
+                {
+                    "name": "build",
+                    "board": "tj3/nrf54l15/cpuapp",
+                    "buildFolder": "${workspaceFolder}/build",
+                    "sysbuild": true,
+                    "cmakeArguments": [
+                        "-DCONF_FILE=prj.conf",
+                        "-DDTC_OVERLAY_FILE=tj3_nrf54l15_cpuapp.overlay",
+                        "-DBOARD_ROOT=${workspaceFolder}",
+                        "-DCMAKE_BUILD_TYPE=Debug"
+                    ],
+                    "envVars": {}
+                }
+            ]
+        }
+    ],
     "cmake.ignoreCMakeListsMissing": true
 }

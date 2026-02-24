@@ -26,7 +26,7 @@ static demand_config_t g_demand_config;
 static mqtt_config_t g_mqtt_config;
 static device_info_t g_device_info;
 static meter_config_t g_meter_config;
-
+static uint8_t g_log_level;
 /* 預設值 */
 static void settings_init_defaults(void)
 {
@@ -74,6 +74,8 @@ static void settings_init_defaults(void)
         g_meter_config.ct_ratio[i] = 1000; // 1000:1
         g_meter_config.ch_igain[i] = 1;
     }
+    /* Log Level 預設値: INFO */
+    g_log_level = 3;
 }
 
 int settings_init(void)
@@ -196,6 +198,22 @@ int settings_set_meter_config(const meter_config_t *config)
     return settings_save_to_flash();
 }
 
+int settings_get_log_level(uint8_t *level)
+{
+    if (level == NULL)
+    {
+        return -EINVAL;
+    }
+    *level = g_log_level;
+    return 0;
+}
+
+int settings_set_log_level(uint8_t level)
+{
+    g_log_level = level;
+    return settings_save_to_flash();
+}
+
 int settings_save_to_flash(void)
 {
     struct fs_file_t file;
@@ -301,6 +319,10 @@ int settings_save_to_flash(void)
         snprintf(line, sizeof(line), "meter_ch_igain_%d=%u\n", i, g_meter_config.ch_igain[i]);
         fs_write(&file, line, strlen(line));
     }
+
+    /* 寫入 Log Level */
+    snprintf(line, sizeof(line), "log_level=%u\n", g_log_level);
+    fs_write(&file, line, strlen(line));
 
     fs_close(&file);
 
@@ -548,7 +570,16 @@ int settings_load_from_flash(void)
                 }
             }
         }
-    }
+        /* 解析 Log Level */
+        if (strcmp(key, "log_level") == 0)
+        {
+            uint8_t lvl = (uint8_t)atoi(value);
+            if (lvl <= 4)
+            {
+                g_log_level = lvl;
+            }
+        }
+    } /* end while */
 
     LOG_INF("Settings loaded from flash");
     return 0;

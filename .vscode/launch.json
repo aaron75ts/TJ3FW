@@ -7,8 +7,8 @@
         {
             "type": "nrf-connect",
             "request": "launch",
-            "name": "Launch the active build configuration",
-            "config": "${activeConfig}",
+            "name": "Launch TJ3FW/build/TJ3FW",
+            "config": "${workspaceFolder}/build/TJ3FW",
             "runToEntryPoint": "main"
         }
     ]

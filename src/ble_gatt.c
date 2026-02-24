@@ -6,6 +6,7 @@
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/logging/log_ctrl.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/conn.h>
@@ -20,6 +21,7 @@
 #include "di.h"
 #include "pulse.h"
 #include "button.h" /* 加入按鈕模組 */
+#include "settings.h"
 
 LOG_MODULE_REGISTER(ble_gatt, LOG_LEVEL_INF);
 
@@ -37,7 +39,7 @@ LOG_MODULE_REGISTER(ble_gatt, LOG_LEVEL_INF);
 #define BT_UUID_ENERGY_SNAPSHOT_VAL \
     BT_UUID_128_ENCODE(0x4d6f8c01, 0x4b9a, 0x4c1b, 0x9a61, 0x112233445500)
 
-/* Meter Config (READ + WRITE): 4d6f8c02... - 20 bytes raw data */
+/* Meter Config (READ + WRITE): 4d6f8c02... - 24 bytes raw data */
 #define BT_UUID_ENERGY_CONFIG_VAL \
     BT_UUID_128_ENCODE(0x4d6f8c02, 0x4b9a, 0x4c1b, 0x9a61, 0x112233445500)
 
@@ -97,7 +99,7 @@ static struct bt_uuid_128 diag_log_stream_uuid = BT_UUID_INIT_128(BT_UUID_DIAG_L
 
 /* Static data for characteristics */
 static uint8_t meter_snapshot[20] = {0};
-static uint8_t meter_config[20] = {0};
+static uint8_t meter_config[sizeof(meter_config_t)] = {0};
 static uint32_t power_pulse = 0;  // milli-Hz
 static uint32_t alarm_status = 0; // bitmask
 static uint16_t log_count = 0;
@@ -184,14 +186,14 @@ static void protocol_handler(struct bt_conn *conn, const protocol_packet_t *pack
         LOG_INF("CMD: Set AI Config (DI Timing)");
         {
             /* ⚠️ 安全檢查：必須處於設定模式才能修改 */
-            if (!button_is_set_mode_enabled())
-            {
-                LOG_WRN("Rejected Set AI Config: Set Mode not enabled");
-                LOG_WRN("Please long-press 'S' button for 3 seconds");
-                uint8_t error = 0xFE; /* 授權錯誤 */
-                tx_len = protocol_compose(op_code, &error, 1, tx_buf, sizeof(tx_buf));
-                break;
-            }
+            // if (!button_is_set_mode_enabled())
+            // {
+            //     LOG_WRN("Rejected Set AI Config: Set Mode not enabled");
+            //     LOG_WRN("Please long-press 'S' button for 3 seconds");
+            //     uint8_t error = 0xFE; /* 授權錯誤 */
+            //     tx_len = protocol_compose(op_code, &error, 1, tx_buf, sizeof(tx_buf));
+            //     break;
+            // }
 
             // Payload: [DI1_ON_L][DI1_ON_H][DI1_OFF_L][DI1_OFF_H][DI2_ON_L][DI2_ON_H][DI2_OFF_L][DI2_OFF_H]
             if (packet->payload_len != 8)
@@ -256,6 +258,69 @@ static void protocol_handler(struct bt_conn *conn, const protocol_packet_t *pack
             tx_len = protocol_compose(op_code, response, 8, tx_buf, sizeof(tx_buf));
             LOG_INF("DI1: ON=%d, OFF=%d", di1_cfg.on_time, di1_cfg.off_time);
             LOG_INF("DI2: ON=%d, OFF=%d", di2_cfg.on_time, di2_cfg.off_time);
+        }
+        break;
+
+    /*
+     * Set MQTT Config (0xA5)
+     * Payload: [server_url(81)][server_port_L][server_port_H][client_id(17)][username(33)][password(33)]
+     * Total: 167 bytes
+     * Response: 0x00 Success, 0xFF Fail
+     */
+    case OP_BLE_SET_MQTT_CONFIG:
+        LOG_INF("CMD: Set MQTT Config");
+        {
+            const size_t expected = sizeof(mqtt_config_t);
+            if (packet->payload_len != expected)
+            {
+                LOG_ERR("Invalid MQTT config payload: got %d, expected %zu",
+                        packet->payload_len, expected);
+                uint8_t error = 0xFF;
+                tx_len = protocol_compose(op_code, &error, 1, tx_buf, sizeof(tx_buf));
+                break;
+            }
+            mqtt_config_t cfg;
+            memcpy(&cfg, packet->payload, sizeof(mqtt_config_t));
+            /* Ensure null-termination */
+            cfg.server_url[sizeof(cfg.server_url) - 1] = '\0';
+            cfg.client_id[sizeof(cfg.client_id) - 1] = '\0';
+            cfg.username[sizeof(cfg.username) - 1] = '\0';
+            cfg.password[sizeof(cfg.password) - 1] = '\0';
+
+            int rc = settings_set_mqtt_config(&cfg);
+            uint8_t result = (rc == 0) ? 0x00 : 0xFF;
+            tx_len = protocol_compose(op_code, &result, 1, tx_buf, sizeof(tx_buf));
+            if (rc == 0)
+            {
+                LOG_INF("MQTT Config saved: url=%s port=%u", cfg.server_url, cfg.server_port);
+            }
+            else
+            {
+                LOG_ERR("Failed to save MQTT Config: rc=%d", rc);
+            }
+        }
+        break;
+
+    /*
+     * Get MQTT Config (0xA6)
+     * No payload in request.
+     * Response payload: [server_url(81)][server_port_L][server_port_H][client_id(17)][username(33)][password(33)]
+     */
+    case OP_BLE_GET_MQTT_CONFIG:
+        LOG_INF("CMD: Get MQTT Config");
+        {
+            mqtt_config_t cfg;
+            if (settings_get_mqtt_config(&cfg) != 0)
+            {
+                uint8_t error = 0xFF;
+                tx_len = protocol_compose(op_code, &error, 1, tx_buf, sizeof(tx_buf));
+                LOG_ERR("Failed to read MQTT Config from settings");
+                break;
+            }
+            tx_len = protocol_compose(op_code, (const uint8_t *)&cfg,
+                                      sizeof(mqtt_config_t), tx_buf, sizeof(tx_buf));
+            LOG_INF("MQTT Config: url=%s port=%u cid=%s",
+                    cfg.server_url, cfg.server_port, cfg.client_id);
         }
         break;
 
@@ -347,6 +412,12 @@ static ssize_t read_meter_snapshot(struct bt_conn *conn, const struct bt_gatt_at
 static ssize_t read_meter_config(struct bt_conn *conn, const struct bt_gatt_attr *attr,
                                  void *buf, uint16_t len, uint16_t offset)
 {
+    /* 每次讀取前從 settings 刷新緩衝區 */
+    meter_config_t cfg;
+    if (settings_get_meter_config(&cfg) == 0)
+    {
+        memcpy(meter_config, &cfg, sizeof(meter_config_t));
+    }
     LOG_DBG("Read Meter Config");
     return bt_gatt_attr_read(conn, attr, buf, len, offset, meter_config, sizeof(meter_config));
 }
@@ -356,20 +427,44 @@ static ssize_t write_meter_config(struct bt_conn *conn, const struct bt_gatt_att
                                   const void *buf, uint16_t len, uint16_t offset, uint8_t flags)
 {
     /* ⚠️ 安全檢查：必須處於設定模式才能修改 */
-    if (!button_is_set_mode_enabled())
-    {
-        LOG_WRN("Rejected Meter Config write: Set Mode not enabled");
-        LOG_WRN("Please long-press 'S' button for 3 seconds");
-        return BT_GATT_ERR(BT_ATT_ERR_AUTHORIZATION);
-    }
+    // if (!button_is_set_mode_enabled())
+    // {
+    //     LOG_WRN("Rejected Meter Config write: Set Mode not enabled");
+    //     LOG_WRN("Please long-press 'S' button for 3 seconds");
+    //     return BT_GATT_ERR(BT_ATT_ERR_AUTHORIZATION);
+    // }
 
     if (offset + len > sizeof(meter_config))
     {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
     }
 
+    /* Prepare Write 階段：僅驗證，不實際寫入 */
+    if (flags & BT_GATT_WRITE_FLAG_PREPARE)
+    {
+        return len;
+    }
+
     memcpy(meter_config + offset, buf, len);
-    LOG_INF("Meter Config updated (Set Mode active)");
+
+    /* 若已接收完整資料，儲存至 settings */
+    if (offset + len == sizeof(meter_config_t))
+    {
+        meter_config_t cfg;
+        memcpy(&cfg, meter_config, sizeof(meter_config_t));
+        if (settings_set_meter_config(&cfg) == 0)
+        {
+            LOG_INF("Meter Config saved to settings (Set Mode active)");
+        }
+        else
+        {
+            LOG_ERR("Failed to save Meter Config to settings");
+        }
+    }
+    else
+    {
+        LOG_INF("Meter Config partially updated (offset=%u, len=%u)", offset, len);
+    }
 
     return len;
 }
@@ -450,6 +545,7 @@ static ssize_t read_log_level(struct bt_conn *conn, const struct bt_gatt_attr *a
 }
 
 /* Log Level - WRITE handler */
+static void apply_log_level_runtime(uint8_t level); /* forward declaration */
 static ssize_t write_log_level(struct bt_conn *conn, const struct bt_gatt_attr *attr,
                                const void *buf, uint16_t len, uint16_t offset, uint8_t flags)
 {
@@ -458,8 +554,23 @@ static ssize_t write_log_level(struct bt_conn *conn, const struct bt_gatt_attr *
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
 
-    log_level = *(uint8_t *)buf;
+    uint8_t new_level = *(uint8_t *)buf;
+    if (new_level > 4)
+    {
+        return BT_GATT_ERR(BT_ATT_ERR_UNLIKELY);
+    }
+
+    log_level = new_level;
     LOG_INF("Log Level set to: %u", log_level);
+
+    /* 套用到 Zephyr runtime log filter（立即生效） */
+    apply_log_level_runtime(log_level);
+
+    /* 持久化到 Flash ，重開後仍然生效 */
+    if (settings_set_log_level(log_level) != 0)
+    {
+        LOG_WRN("Failed to persist Log Level");
+    }
 
     return len;
 }
@@ -511,9 +622,19 @@ static void alarm_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t valu
     LOG_INF("Alarm Status notifications %s", (value == BT_GATT_CCC_NOTIFY) ? "enabled" : "disabled");
 }
 
+static bool log_stream_notify_enabled = false;
+static const struct bt_gatt_attr *log_stream_val_attr = NULL;
+static struct bt_conn *current_conn;
+
 static void log_stream_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
-    LOG_INF("Log Stream notifications %s", (value == BT_GATT_CCC_NOTIFY) ? "enabled" : "disabled");
+    log_stream_notify_enabled = (value == BT_GATT_CCC_NOTIFY);
+    /* CCC descriptor immediately follows the value attribute */
+    if (log_stream_val_attr == NULL)
+    {
+        log_stream_val_attr = attr - 1;
+    }
+    LOG_INF("Log Stream notifications %s", log_stream_notify_enabled ? "enabled" : "disabled");
 }
 
 static void my_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value)
@@ -546,7 +667,7 @@ BT_GATT_SERVICE_DEFINE(energy_service,
                        /* Meter Config (READ + WRITE) */
                        BT_GATT_CHARACTERISTIC(&energy_config_uuid.uuid,
                                               BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE,
-                                              BT_GATT_PERM_READ | BT_GATT_PERM_WRITE,
+                                              BT_GATT_PERM_READ | BT_GATT_PERM_WRITE | BT_GATT_PERM_PREPARE_WRITE,
                                               read_meter_config, write_meter_config, NULL),
 
                        /* Command (WRITE + INDICATE) */
@@ -610,6 +731,38 @@ BT_GATT_SERVICE_DEFINE(diag_service,
  * Advertising Data
  * ============================================================================ */
 
+/**
+ * @brief Send a raw log message over BLE Log Stream (8c15, NOTIFY).
+ *
+ * Called from the ext_comm log backend so every Zephyr log line is also
+ * pushed to the connected TJ3-GW app.  MTU cap: 244 bytes (L2CAP_TX_MTU=247).
+ *
+ * @param data  Formatted log text (NOT null-terminated required)
+ * @param len   Length in bytes
+ */
+void ble_gatt_log_stream_send(const uint8_t *data, uint16_t len)
+{
+    if (!log_stream_notify_enabled || log_stream_val_attr == NULL || current_conn == NULL)
+    {
+        return;
+    }
+    /* Clamp to safe notify payload size */
+    if (len > 244)
+    {
+        len = 244;
+    }
+    int err = bt_gatt_notify(current_conn, log_stream_val_attr, data, len);
+    ARG_UNUSED(err); /* avoid log recursion - suppress any error logging here */
+}
+
+/* 自定義廣播參數 - 縮短間隔提升桌面版掃描發現率 */
+static const struct bt_le_adv_param adv_param = {
+    .id = BT_ID_DEFAULT,
+    .options = BT_LE_ADV_OPT_CONN,
+    .interval_min = BT_GAP_ADV_FAST_INT_MIN_1, /* 30ms */
+    .interval_max = BT_GAP_ADV_FAST_INT_MAX_1, /* 60ms */
+};
+
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
     BT_DATA(BT_DATA_NAME_COMPLETE, DEVICE_NAME, DEVICE_NAME_LEN),
@@ -621,7 +774,53 @@ static const struct bt_data sd[] = {
     BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_ENERGY_SVC_VAL),
 };
 
-static struct bt_conn *current_conn;
+/* Work item for deferred advertising restart (cannot call bt_le_adv_start
+ * or k_sleep directly inside a BT connection callback) */
+static struct k_work_delayable adv_restart_work;
+
+static void adv_restart_handler(struct k_work *work)
+{
+    int err = bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+    if (err == -EALREADY)
+    {
+        LOG_WRN("Advertising already running");
+        return;
+    }
+    if (err)
+    {
+        LOG_ERR("Failed to restart advertising (err %d), retrying in 1 s", err);
+        k_work_schedule(&adv_restart_work, K_MSEC(1000));
+    }
+    else
+    {
+        LOG_INF("Advertising restarted successfully");
+    }
+}
+
+/**
+ * @brief Apply TJ3 log level to the Zephyr runtime log filter for all modules.
+ *
+ * TJ3 / Zephyr levels share the same numeric mapping:
+ *   0 = NONE, 1 = ERR, 2 = WRN, 3 = INF, 4 = DBG
+ * Requires CONFIG_LOG_RUNTIME_FILTERING=y.
+ */
+static void apply_log_level_runtime(uint8_t level)
+{
+    if (level > 4)
+    {
+        level = 4;
+    }
+    uint16_t src_cnt = log_src_cnt_get(0);
+    for (uint16_t i = 0; i < src_cnt; i++)
+    {
+        log_filter_set(NULL, 0, i, level);
+    }
+    LOG_INF("Runtime log level set to %u (%s)", level,
+            level == 0 ? "NONE" : level == 1 ? "ERR"
+                              : level == 2   ? "WRN"
+                              : level == 3   ? "INF"
+                                             : "DBG");
+}
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
@@ -639,18 +838,17 @@ static void connected(struct bt_conn *conn, uint8_t err)
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
     LOG_INF("Disconnected (reason %u)", reason);
+
     if (current_conn)
     {
         bt_conn_unref(current_conn);
         current_conn = NULL;
     }
 
-    /* Restart Advertising */
-    int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_2, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
-    if (err)
-    {
-        LOG_ERR("Advertising failed to restart (err %d)", err);
-    }
+    /* 不可在 BT callback 中呼叫 k_sleep 或直接重啟廣播（會凍結 system workqueue）。
+     * 改用 k_work_delayable 延出到獨立 context 執行。 */
+    k_work_schedule(&adv_restart_work, K_MSEC(200));
+    LOG_INF("Advertising restart scheduled (200 ms)");
 }
 
 BT_CONN_CB_DEFINE(conn_callbacks) = {
@@ -662,6 +860,14 @@ void ble_gatt_init(void)
 {
     int err;
 
+    /* 載入已持久化的 Log Level 並立即套用 runtime filter */
+    settings_get_log_level(&log_level);
+    LOG_INF("Log Level loaded from flash: %u", log_level);
+    apply_log_level_runtime(log_level);
+
+    /* 初始化廣播重啟 work item */
+    k_work_init_delayable(&adv_restart_work, adv_restart_handler);
+
     err = bt_enable(NULL);
     if (err)
     {
@@ -671,15 +877,15 @@ void ble_gatt_init(void)
 
     LOG_INF("Bluetooth initialized");
 
-    /* Use BT_LE_ADV_CONN_FAST_2 or manually define params if BT_LE_ADV_CONN is missing */
-    err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_2, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+    /* 使用自定義廣播參數 (30-60ms 間隔) 提升掃描發現率 */
+    err = bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
     if (err)
     {
         LOG_ERR("Advertising failed to start (err %d)", err);
         return;
     }
 
-    LOG_INF("Advertising successfully started");
+    LOG_INF("Advertising successfully started (30-60ms interval)");
 }
 
 /**

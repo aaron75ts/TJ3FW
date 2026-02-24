@@ -7,6 +7,7 @@
 #include <zephyr/logging/log_ctrl.h>
 #include "protocol.h"
 #include "ext_comm.h"
+#include "ble_gatt.h"
 
 static const struct device *uart_dev = DEVICE_DT_GET(DT_NODELABEL(uart30));
 static uint8_t log_buf[256];
@@ -30,42 +31,52 @@ static int buf_char_out(uint8_t *data, size_t length, void *ctx)
 /* Define the log output instance with a dedicated scratch buffer */
 LOG_OUTPUT_DEFINE(log_output_custom, buf_char_out, scratch_buf, 1);
 
+/* Recursion guard: log_output_msg_process and bt_gatt_notify may themselves
+ * emit log messages, which would re-enter process() and cause a stack overflow. */
+static bool in_log_process = false;
+
 static void process(const struct log_backend *const backend,
                     union log_msg_generic *msg)
 {
-    if (!device_is_ready(uart_dev))
+    if (in_log_process)
     {
         return;
     }
+    in_log_process = true;
 
     size_t len = 0;
-
-    /* Use the generic output processor to format the message into text */
-    /* We pass the address of 'len' as the context so buf_char_out can update it */
     log_output_ctx_set(&log_output_custom, &len);
 
-    /* Flags: Level, Timestamp. No Colors (protocol doesn't need ANSI codes) */
-    uint32_t flags = LOG_OUTPUT_FLAG_LEVEL | LOG_OUTPUT_FLAG_TIMESTAMP | LOG_OUTPUT_FLAG_FORMAT_SYSLOG;
-
+    /* No ANSI colours – raw syslog text is easier to parse on both ends */
+    uint32_t flags = LOG_OUTPUT_FLAG_LEVEL | LOG_OUTPUT_FLAG_TIMESTAMP |
+                     LOG_OUTPUT_FLAG_FORMAT_SYSLOG;
     log_output_msg_process(&log_output_custom, &msg->log, flags);
 
     if (len > 0)
     {
-        /* Null terminate just in case, though not strictly needed for protocol */
         log_buf[len] = '\0';
 
-        /* Wrap in Protocol Frame */
-        int packet_len = protocol_compose(OP_EXT_LOG_OUTPUT, log_buf, len, protocol_buf, sizeof(protocol_buf));
+        /* ── BLE Log Stream (8c15, NOTIFY) ─────────────────────────────
+         * Always attempted, independent of UART availability. */
+        ble_gatt_log_stream_send(log_buf, (uint16_t)len);
 
-        if (packet_len > 0)
+        /* ── UART Protocol Frame ────────────────────────────────────────
+         * Only sent when the UART device is ready. */
+        if (device_is_ready(uart_dev))
         {
-            /* Send via UART Poll (Blocking) to ensure integrity */
-            for (int i = 0; i < packet_len; i++)
+            int packet_len = protocol_compose(OP_EXT_LOG_OUTPUT, log_buf, len,
+                                              protocol_buf, sizeof(protocol_buf));
+            if (packet_len > 0)
             {
-                uart_poll_out(uart_dev, protocol_buf[i]);
+                for (int i = 0; i < packet_len; i++)
+                {
+                    uart_poll_out(uart_dev, protocol_buf[i]);
+                }
             }
         }
     }
+
+    in_log_process = false;
 }
 
 static void panic(const struct log_backend *const backend)
