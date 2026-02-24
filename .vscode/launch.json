@@ -10,6 +10,42 @@
             "name": "Launch TJ3FW/build/TJ3FW",
             "config": "${workspaceFolder}/build/TJ3FW",
             "runToEntryPoint": "main"
+        },
+        {
+            "name": "TJ3-GW: Run",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/docs/TJ3-GW/main.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/docs/TJ3-GW",
+            "justMyCode": true
+        },
+        {
+            "name": "TJ3-GW: Run (--debug)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/docs/TJ3-GW/main.py",
+            "args": [
+                "--debug"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/docs/TJ3-GW",
+            "justMyCode": true
+        },
+        {
+            "name": "TJ3-GW: Run (verbose BLE)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/docs/TJ3-GW/main.py",
+            "args": [
+                "--debug"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/docs/TJ3-GW",
+            "justMyCode": false,
+            "env": {
+                "BLEAK_LOGGING": "1"
+            }
         }
     ]
 }
